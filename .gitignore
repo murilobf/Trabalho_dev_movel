@@ -46,3 +46,9 @@ example
 
 # .json
 *.json
+
+# python
+*.pyc
+
+# sql
+*.db
