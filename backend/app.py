@@ -3,7 +3,7 @@ from flask_cors import CORS
 from werkzeug.security import generate_password_hash
 
 from models import Usuario, db
-
+from sqlalchemy.sql import text
 
 def create_app():
     app = Flask(__name__)
@@ -11,7 +11,7 @@ def create_app():
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
     db.init_app(app)
-    CORS(app)  # útil se você for testar a partir do Expo web; não afeta apps nativos
+    CORS(app)  
 
     with app.app_context():
         db.create_all()
@@ -59,6 +59,18 @@ def register_routes(app):
     @app.get("/usuarios/<int:usuario_id>")
     def obter_usuario(usuario_id):
         usuario = Usuario.query.get(usuario_id)
+        if not usuario:
+            return jsonify({"erro": "usuário não encontrado"}), 404
+        return jsonify(usuario.to_dict())
+
+    # READ (por email)
+    @app.get("/usuarios_email/<string:email>")
+    def obter_usuario_email(email):
+        query = text("SELECT * FROM usuarios WHERE email = :email")
+        usuario = db.session.execute(query, {
+            "email": email
+        })
+        
         if not usuario:
             return jsonify({"erro": "usuário não encontrado"}), 404
         return jsonify(usuario.to_dict())

@@ -41,8 +41,46 @@ export const radius = {
 // Uso: <SafeAreaView style={layout.safe}> / <ScrollView contentContainerStyle={layout.content}>
 // Na prática você não precisa nem importar isso direto — ScreenContainer já aplica.
 export const layout = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.paper },
-  content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl },
+  safe: { 
+    flex: 1, 
+    backgroundColor: 
+    colors.paper 
+  },
+
+  content: { 
+    paddingHorizontal: spacing.lg, 
+    paddingBottom: spacing.xl 
+  },
+  
+  center: { 
+    flexGrow: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  title: {
+    fontFamily: fonts.serif,
+    fontSize: 26,
+    color: colors.ink,
+    marginBottom: 4,
+  },
+  subtitle: {
+    fontFamily: fonts.sans,
+    fontSize: 13,
+    color: colors.inkSoft,
+    marginBottom: 28,
+  },
+
+  input: {
+    width: "100%",
+    backgroundColor: "#FFFFFF",
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 12,
+    fontFamily: fonts.sans,
+    fontSize: 14,
+    color: colors.ink,
+    marginBottom: spacing.sm,
+  },
 });
 
 // Estilos de texto reaproveitáveis, pra não recriar fontFamily/cor em cada tela.
