@@ -44,9 +44,6 @@ example
 
 /.vscode
 
-# .json
-*.json
-
 # python
 *.pyc
 
