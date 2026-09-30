@@ -1,4 +1,4 @@
-const BASE_URL = "http://127.0.0.1:5000"; // troque pelo IP/host da sua API
+const BASE_URL = "http://10.0.2.2:5000"; // troque pelo IP/host da sua API
 
 async function request(path, options = {}) {
   const res = await fetch(`${BASE_URL}${path}`, {
@@ -8,7 +8,6 @@ async function request(path, options = {}) {
     },
     ...options,
   });
-
   let data = null;
   try {
     data = await res.json();

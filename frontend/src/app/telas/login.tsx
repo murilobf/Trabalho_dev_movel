@@ -4,23 +4,22 @@ import {layout} from "../../constants/theme"
 import {ScreenContainer} from "../../components/ScreenContainer"
 import {api} from "../../api/api"
 
-const [erro, setErro] = useState(false)
-
-async function fazerLogin(){
-    setErro(false);
-
-    try{
-        const usuario = api.get("/usuario")
-    }
-    catch{
-        setErro(true)
-    }
-}
-
-export default function loginScreen(){
+export default function telaLogin(){
     
     const [email, setEmail] = useState("")
     const [senha, setSenha] = useState("")
+    const [erro, setErro] = useState(false)
+
+    async function fazerLogin(){
+        setErro(false);
+
+        try{
+            const usuario = api.get("/usuarios")
+        }
+        catch{
+            setErro(true)
+        }
+    }
     return(
         <ScreenContainer scrollProps={{contentContainerStyle:[layout.center]}}>
             <Text style={layout.title}>Login</Text>
