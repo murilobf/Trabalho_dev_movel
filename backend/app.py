@@ -69,11 +69,11 @@ def register_routes(app):
         query = text("SELECT * FROM usuarios WHERE email = :email")
         usuario = db.session.execute(query, {
             "email": email
-        })
+        }).mappings().first()
         
         if not usuario:
             return jsonify({"erro": "usuário não encontrado"}), 404
-        return jsonify(usuario.to_dict())
+        return jsonify(dict(usuario))
 
     # UPDATE
     @app.put("/usuarios/<int:usuario_id>")
