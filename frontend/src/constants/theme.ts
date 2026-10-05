@@ -81,6 +81,24 @@ export const layout = StyleSheet.create({
     color: colors.ink,
     marginBottom: spacing.sm,
   },
+
+  fieldLabel: {
+    fontFamily: fonts.sansMedium,
+    fontSize: 11,
+    color: colors.inkSoft,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    marginTop: spacing.lg,
+    marginBottom: spacing.xs,
+  },
+  fieldValue: {
+    fontFamily: fonts.sans,
+    fontSize: 15,
+    color: colors.ink,
+    paddingBottom: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.line,
+  },
 });
 
 // Estilos de texto reaproveitáveis, pra não recriar fontFamily/cor em cada tela.

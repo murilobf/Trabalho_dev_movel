@@ -4,49 +4,35 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { layout } from "../../constants/theme";
 import { ScreenContainer } from "../../components/ScreenContainer";
 import { api } from "../../api/api";
+import { useRouter } from "expo-router";
 
 export default function TelaLogin() {
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [erro, setErro] = useState(false);
-  const [dadosUsuario, setDadosUsuario] = useState<string | null>(null);
+  const [carregando, setCarregando] = useState(false)
 
-  useEffect(() => {
-    async function carregar() {
-      try {
-        const salvo = await AsyncStorage.getItem("dadosUsuario");
-        setDadosUsuario(salvo);
-      } catch {
-        setDadosUsuario(null);
-      }
-    }
-    carregar();
-  }, []);
+  const router = useRouter()
 
-    async function fazerLogin() {
+  async function fazerLogin() {
     setErro(false);
     try {
-    const usuario = await api.get(`/usuarios_email/${email}`);
-    const texto = JSON.stringify(usuario);
+      const usuario = await api.get(`/usuarios_email?email=${email}&senha=${senha}`);
+      const texto = JSON.stringify(usuario);
 
-    await AsyncStorage.setItem("dadosUsuario", texto);
-    setDadosUsuario(texto);
-    } catch (e) {
-    console.log("Erro no login:", e);
-    setErro(true);
-    }
-    }
+      await AsyncStorage.setItem("dadosUsuario", texto);
 
-  async function fazerLogout() {
-    await AsyncStorage.removeItem("dadosUsuario");
-    setDadosUsuario(null);
+      router.replace("/(tabs)/perfil")
+    } 
+    catch (e) {
+      console.log("Erro no login:", e);
+      setErro(true);
+    }
   }
-
-  const logado = dadosUsuario != null && dadosUsuario !== "";
 
   return (
     <ScreenContainer scrollProps={{ contentContainerStyle: [layout.center] }}>
-      {!logado ? (
+      {!carregando ? (
         <>
           <Text style={layout.title}>Login</Text>
           <Text style={layout.subtitle}>Entre na sua conta</Text>
@@ -67,19 +53,16 @@ export default function TelaLogin() {
             secureTextEntry
           />
 
-          {erro && <Text>Usuário não encontrado ou erro no servidor</Text>}
+          {erro && <Text>Crenciais incorretas ou erro no servidor</Text>}
 
           <Button title="Login" onPress={fazerLogin} />
         </>
       ) : (
         <>
-          <Text style={layout.title}>Dados da Conta</Text>
+          <Text style={layout.title}>Carregando...</Text>
           <Text style={layout.subtitle}>
-            Confira e altere informações da sua conta
+            Aguarde um momento
           </Text>
-          <Text>{dadosUsuario}</Text>
-
-          <Button title="Sair" onPress={fazerLogout} />
         </>
       )}
     </ScreenContainer>

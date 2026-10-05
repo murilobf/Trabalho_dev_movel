@@ -1,6 +1,6 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-from werkzeug.security import generate_password_hash
+from werkzeug.security import generate_password_hash, check_password_hash
 
 from models import Usuario, db
 from sqlalchemy.sql import text
@@ -64,15 +64,24 @@ def register_routes(app):
         return jsonify(usuario.to_dict())
 
     # READ (por email)
-    @app.get("/usuarios_email/<string:email>")
-    def obter_usuario_email(email):
+    @app.get("/usuarios_email")
+    def obter_usuario_email():
+        email = ''
+        senha = ''
+
+        requisicao = request.args.to_dict()
+        email = requisicao['email']
+        senha = requisicao['senha']
+
         query = text("SELECT * FROM usuarios WHERE email = :email")
         usuario = db.session.execute(query, {
-            "email": email
+            "email": email,
         }).mappings().first()
-        
-        if not usuario:
+
+        senha_correta = check_password_hash(usuario["senha_hash"], senha)
+        if not usuario or not senha_correta:
             return jsonify({"erro": "usuário não encontrado"}), 404
+        
         return jsonify(dict(usuario))
 
     # UPDATE
