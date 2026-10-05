@@ -78,7 +78,14 @@ def register_routes(app):
             "email": email,
         }).mappings().first()
 
-        senha_correta = check_password_hash(usuario["senha_hash"], senha)
+        senha_correta = False
+        try:
+            senha_correta = check_password_hash(usuario["senha_hash"], senha)
+        
+        except:
+            senha_correta = False
+
+        
         if not usuario or not senha_correta:
             return jsonify({"erro": "usuário não encontrado"}), 404
         

@@ -1,15 +1,34 @@
 import { Text, TextInput, Button } from "react-native";
 import { useState } from "react";
 import {layout} from "../../constants/theme"
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {ScreenContainer} from "../../components/ScreenContainer"
 import {api} from "../../api/api"
+import {useRouter} from "expo-router"
 
 export default function telaRegistro(){
 
+    const router = useRouter()
     const [error, setErro] = useState(false)
     const [nome_usuario, setNomeUsuario] = useState("")
     const [email, setEmail] = useState("")
     const [senha, setSenha] = useState("")
+
+    async function fazerLogin() {
+        setErro(false);
+        try {
+        const usuario = await api.get(`/usuarios_email?email=${email}&senha=${senha}`);
+        const texto = JSON.stringify(usuario);
+
+        await AsyncStorage.setItem("dadosUsuario", texto);
+
+        router.replace("/(tabs)/perfil")
+        } 
+        catch (e) {
+        console.log("Erro no login:", e);
+        setErro(true);
+        }
+    }
 
     async function fazerRegistro(){
         setErro(false);
@@ -21,7 +40,7 @@ export default function telaRegistro(){
         }
         try{
             const usuario = await api.post("/usuarios",body)
-            console.log(usuario)
+            fazerLogin()
         }
         catch{
             setErro(true)
