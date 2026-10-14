@@ -27,6 +27,13 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, size }) => <Feather name="user" size={size} color={color} />,
         }}
       />
+      <Tabs.Screen
+        name="livros"
+        options={{
+          title: "Livros",
+          tabBarIcon: ({ color, size }) => <Feather name="user" size={size} color={color} />,
+        }}
+      />
     </Tabs>
   );
 }

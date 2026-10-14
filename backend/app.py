@@ -2,7 +2,7 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 
-from models import Usuario, db
+from models import Usuario, Genero, Livro, GenerosLivros, db
 from sqlalchemy.sql import text
 
 def create_app():
@@ -25,6 +25,11 @@ def register_routes(app):
     def health():
         return jsonify({"status": "ok", "service": "usuarios-api"})
 
+    """
+    =========================================================================================
+    CRUD usuários
+    =========================================================================================
+    """
     # CREATE
     @app.post("/usuarios")
     def criar_usuario():
@@ -84,7 +89,6 @@ def register_routes(app):
         
         except:
             senha_correta = False
-
         
         if not usuario or not senha_correta:
             return jsonify({"erro": "usuário não encontrado"}), 404
@@ -126,6 +130,158 @@ def register_routes(app):
         db.session.commit()
         return "", 204
 
+    """
+    =========================================================================================
+    CRUD Livros
+    =========================================================================================
+    """
+
+    # CREATE
+
+    @app.post("/livros")
+    def criar_livro():
+        data = request.get_json(silent=True) or {}
+
+        nome = data.get("nome")
+        genero_id = data.get("genero_id")
+        descricao = data.get("descricao")
+
+        if not nome or not genero_id:
+            return jsonify({"erro": "nome e gênero são obrigatórios"}), 400
+
+        try:
+
+            query_livro = text("INSERT INTO livros (nome, descricao) VALUES (:nome, :descricao) RETURNING id")
+            livro_id = db.session.execute(query_livro, {
+                "nome": nome,
+                "descricao": descricao
+            }).scalar()
+
+            query_livro_genero = text("INSERT INTO generosLivros (livro_id, genero_id) VALUES (:livro_id, :genero_id)")
+            db.session.execute(query_livro_genero, {
+                "livro_id": livro_id,
+                "genero_id": genero_id
+            })
+
+            db.session.commit()
+
+            return jsonify({"id": livro_id, "nome": nome}), 201
+
+        except:
+            return jsonify({"erro": "erro ao criar livro"}), 500
+
+    # READ (todos)
+    """
+    TODO: implementar paginação
+    """
+    @app.get("/livros")
+    def obter_livros():
+        query = text("SELECT * FROM livros")
+
+        livros = db.session.execute(query).mappings().all()
+
+        if not livros:
+            return jsonify({"erro": "Nenhum livro encontrado"}), 404
+
+        return jsonify(dict(livros))
+
+
+    # READ (um específico)
+    @app.get("/livros/<string:livro_id>")
+    def obter_livros():
+        livro_id = ''
+
+        requisicao = request.args.to_dict()
+        livro_id = requisicao["id"]
+        query = text("SELECT * FROM livros WHERE id = :id")
+
+        livro = db.session.execute(query, {
+            "id": livro_id
+        }).mappings().first()
+
+        if not livro:
+                return jsonify({"erro": "Livro não encontrado"}), 404
+                
+        return jsonify(dict(livro))
+
+    #UPDATE
+    @app.put("/livros")
+
+    #DELETE
+    @app.delete("/livros")
+    def deleta_livro():
+        requisicao = request.args.to_dict()
+        livro_id = requisicao['id']
+
+        query = text("DELETE FROM livros WHERE id = :id")
+        db.session.execute(query, {
+            "id":livro_id
+        })
+
+    """
+    =========================================================================================
+    CRUD GENERO
+    =========================================================================================
+    """   
+
+    # CREATE
+    @app.post("/generos")
+    def cria_genero():
+        data = request.get_json(silent=True)
+
+        nome = data.get("nome")
+
+        if not nome:
+            return jsonify({"erro":"nome obrigatório"}),400
+
+        query = text("INSERT INTO generos(nome) VALUES (:nome)")
+
+        try:
+            db.session.execute(query, {
+                "nome":nome
+            })
+
+            db.session.commit()
+            return jsonify({"nome":nome}),201
+
+        except:
+            return jsonify({"erro":"erro ao gerar gênero"}),500
+
+    @app.get("/generos")
+    def obter_generos():
+        query = text("SELECT * FROM generos")
+
+        generos = db.session.execute(query).mappings().all()
+
+        if not generos:
+            return jsonify({"erro": "Nenhum livro encontrado"}), 404
+
+        return jsonify(dict(generos))
+
+
+    # READ (um específico)
+    @app.get("/generos/<string:genero_id>")
+    def obter_generos():
+        genero_id = ''
+
+        requisicao = request.args.to_dict()
+        genero_id = requisicao["id"]
+        query = text("SELECT * FROM generos WHERE id = :id")
+
+        genero = db.session.execute(query, {
+            "id": genero_id
+        }).mappings().first()
+
+        if not genero:
+                return jsonify({"erro": "Genero não encontrado"}), 404
+                
+        return jsonify(dict(genero))
+
+    """
+    =========================================================================================
+    AUXILIARES
+    =========================================================================================
+    """
     @app.errorhandler(404)
     def rota_nao_encontrada(_e):
         return jsonify({"erro": "rota não encontrada"}), 404
