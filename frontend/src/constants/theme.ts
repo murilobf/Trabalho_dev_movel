@@ -99,6 +99,38 @@ export const layout = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.line,
   },
+
+  card: {
+        width: "100%",
+        padding: 16,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: "#ddd",
+        backgroundColor: "#fff",
+        gap: 4,
+        // sombra leve
+        elevation: 2,
+        shadowColor: "#000",
+        shadowOpacity: 0.08,
+        shadowRadius: 4,
+        shadowOffset: { width: 0, height: 2 },
+    },
+    autor: {
+        color: "#555",
+        fontStyle: "italic",
+    },
+    genero: {
+        alignSelf: "flex-start",
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 8,
+        backgroundColor: "#eee",
+        fontSize: 12,
+        marginTop: 4,
+    },
+    descricao: {
+        marginTop: 6,
+    },
 });
 
 // Estilos de texto reaproveitáveis, pra não recriar fontFamily/cor em cada tela.

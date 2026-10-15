@@ -1,9 +1,10 @@
-import { Text, TextInput, Pressable, View } from "react-native";
+import { Text, TextInput, Pressable, View, Button } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import { useEffect, useState } from "react";
 import { layout } from "@/constants/theme";
 import { ScreenContainer } from "@/components/ScreenContainer";
 import { api } from "@/api/api";
+import { useRouter } from "expo-router";
 
 const FILTROS_INICIAIS = {
     nome: "",
@@ -32,6 +33,9 @@ export default function TelaLivros() {
     const [filtros, setFiltros] = useState(FILTROS_INICIAIS);
     const [carregando, setCarregando] = useState(false);
 
+    const router = useRouter()
+    
+
     const atualizarFiltro = (campo:string, valor:string) =>
         setFiltros((anterior) => ({ ...anterior, [campo]: valor }));
 
@@ -40,7 +44,7 @@ export default function TelaLivros() {
     // Carrega as opções de gênero uma única vez
     useEffect(() => {
         api.get("/generos")
-            .then((res) => setGeneros(res.data))
+            .then((res) => setGeneros(res))
             .catch(() => setGeneros([]));
     }, []);
 
@@ -53,7 +57,7 @@ export default function TelaLivros() {
             try {
                 const res = await api.get(`/livros${montarQueryString(filtros)}`);
                 if (!cancelado) 
-                    setLivros(res.data);
+                    setLivros(res);
 
             } 
             catch (erro) {
@@ -113,13 +117,19 @@ export default function TelaLivros() {
                 >
                     <Picker.Item label="Todos os gêneros" value="" />
                     {generos.map((g) => (
-                        <Picker.Item key={g} label={g} value={g} />
+                        <Picker.Item key={g.id} label={g.nome} value={g.id} />
                     ))}
                 </Picker>
 
                 <Pressable onPress={limparFiltros}>
                     <Text>Limpar filtros</Text>
                 </Pressable>
+                <Text style={layout.subtitle}>Clique aqui para Solicitar um novo livro</Text>
+                    <Button
+                    title="Solicite um novo livro"
+                     onPress={() => router.push("/telas/form_novo_livro")}>
+                        
+                    </Button>
             </View>
 
             {carregando ? (
@@ -133,7 +143,22 @@ export default function TelaLivros() {
                 </>
             ) : (
                 <>
-                    {/* Renderize aqui a lista usando livros */}
+                    {livros.map((livro) => (
+                        <View style={layout.card} key={livro.id}>
+                            <Text style={layout.subtitle}>{livro.nome}</Text>
+                            <Text style={layout.autor}>{livro.autor}</Text>
+
+                            {livro.genero ? (
+                                <Text style={layout.genero}>{livro.genero}</Text>
+                            ) : null}
+
+                            {livro.descricao ? (
+                                <Text numberOfLines={3} style={layout.descricao}>
+                                    {livro.descricao}
+                                </Text>
+                            ) : null}
+                        </View>
+                    ))}
                 </>
             )}
         </ScreenContainer>

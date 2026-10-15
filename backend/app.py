@@ -141,6 +141,7 @@ def register_routes(app):
     @app.post("/livros")
     def criar_livro():
         data = request.get_json(silent=True) or {}
+        print(data)
 
         nome = data.get("nome")
         genero_id = data.get("genero_id")
@@ -150,7 +151,6 @@ def register_routes(app):
             return jsonify({"erro": "nome e gênero são obrigatórios"}), 400
 
         try:
-
             query_livro = text("INSERT INTO livros (nome, descricao) VALUES (:nome, :descricao) RETURNING id")
             livro_id = db.session.execute(query_livro, {
                 "nome": nome,
@@ -180,15 +180,12 @@ def register_routes(app):
 
         livros = db.session.execute(query).mappings().all()
 
-        if not livros:
-            return jsonify({"erro": "Nenhum livro encontrado"}), 404
-
-        return jsonify(dict(livros))
+        return jsonify([dict(l) for l in livros])
 
 
     # READ (um específico)
     @app.get("/livros/<string:livro_id>")
-    def obter_livros():
+    def obter_livro():
         livro_id = ''
 
         requisicao = request.args.to_dict()
@@ -218,6 +215,9 @@ def register_routes(app):
             "id":livro_id
         })
 
+        db.session.commit()
+        return jsonify({""}), 204
+
     """
     =========================================================================================
     CRUD GENERO
@@ -228,7 +228,7 @@ def register_routes(app):
     @app.post("/generos")
     def cria_genero():
         data = request.get_json(silent=True)
-
+        print(data)
         nome = data.get("nome")
 
         if not nome:
@@ -245,23 +245,21 @@ def register_routes(app):
             return jsonify({"nome":nome}),201
 
         except:
+            db.session.rollback()
             return jsonify({"erro":"erro ao gerar gênero"}),500
 
     @app.get("/generos")
     def obter_generos():
-        query = text("SELECT * FROM generos")
+        query = text("SELECT id, nome FROM generos ORDER BY nome")
 
         generos = db.session.execute(query).mappings().all()
-
-        if not generos:
-            return jsonify({"erro": "Nenhum livro encontrado"}), 404
-
-        return jsonify(dict(generos))
+        
+        return jsonify([dict(g) for g in generos])
 
 
     # READ (um específico)
     @app.get("/generos/<string:genero_id>")
-    def obter_generos():
+    def obter_genero():
         genero_id = ''
 
         requisicao = request.args.to_dict()
@@ -276,6 +274,25 @@ def register_routes(app):
                 return jsonify({"erro": "Genero não encontrado"}), 404
                 
         return jsonify(dict(genero))
+
+    # UPDATE
+    @app.put("/generos")
+
+    # DELETE
+    @app.delete("/generos")
+    def deleta_genero():
+        requisicao = request.args.to_dict()
+        genero_id = requisicao['id']
+
+        query = text("DELETE FROM generos WHERE id = :id")
+        db.session.execute(query, {
+            "id":genero_id
+        })
+
+        db.session.commit()
+        return jsonify({""}), 204
+    
+
 
     """
     =========================================================================================
