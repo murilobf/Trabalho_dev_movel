@@ -216,10 +216,7 @@ export const formStyles = StyleSheet.create({
         fontSize: 14,
         color: colors.ink,
     },
-    textarea: {
-        minHeight: 150,
-        textAlignVertical: "top",
-    },
+    textarea: { minHeight: 150, textAlignVertical: "top" },
     pickerContainer: {
         borderWidth: 1,
         borderColor: colors.line,
@@ -253,31 +250,47 @@ export const formStyles = StyleSheet.create({
         color: colors.inkSoft,
         marginTop: 18,
     },
-    chips: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    },
+    chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
     chip: {
-        minHeight: 44,
-        justifyContent: "center",
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        borderRadius: 22,
-        borderWidth: 1,
-        borderColor: colors.line,
-        backgroundColor: "#FFFFFF",
+        minHeight: 44, justifyContent: "center", paddingHorizontal: 16,
+        paddingVertical: 10, borderRadius: 22, borderWidth: 1,
+        borderColor: colors.line, backgroundColor: "#FFFFFF",
     },
-    chipSelecionado: {
-        backgroundColor: colors.oxblood,
-        borderColor: colors.oxblood,
+    chipSelecionado: { backgroundColor: colors.oxblood, borderColor: colors.oxblood },
+    chipTexto: { fontFamily: fonts.sansMedium, fontSize: 14, color: colors.ink },
+    chipTextoSelecionado: { color: "#FFFFFF" },
+
+});
+
+// Estilos reutilizáveis para catálogos, filtros e listas de conteúdo.
+export const catalogStyles = StyleSheet.create({
+    filters: { gap: 14, marginBottom: 28 },
+    dateRow: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
+    dateInput: { flexGrow: 1, flexBasis: 210, width: "auto", minWidth: 0 },
+    genrePicker: { backgroundColor: "#FFFFFF", borderRadius: 12 },
+    secondaryButton: {
+        minHeight: 44, borderWidth: 1, borderColor: colors.line,
+        borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12,
+        alignItems: "center", justifyContent: "center",
     },
-    chipTexto: {
-        fontFamily: fonts.sansMedium,
-        fontSize: 14,
-        color: colors.ink,
+    secondaryButtonText: { fontFamily: fonts.sansSemibold, fontSize: 13, color: colors.oxblood },
+    suggestionText: {
+        fontFamily: fonts.sans, fontSize: 13, lineHeight: 21, color: colors.inkSoft,
+        textAlign: "center", marginTop: 8,
     },
-    chipTextoSelecionado: {
-        color: "#FFFFFF",
+    bookCard: { borderLeftWidth: 4, borderLeftColor: colors.oxblood, gap: 10, marginBottom: 16 },
+    bookTitle: { fontFamily: fonts.serifSemibold, fontSize: 23, lineHeight: 30, color: colors.ink },
+    author: { fontFamily: fonts.sansMedium, fontSize: 13, lineHeight: 20, color: colors.inkSoft },
+    badge: {
+        alignSelf: "flex-start", overflow: "hidden", borderRadius: 10,
+        paddingHorizontal: 10, paddingVertical: 6, backgroundColor: colors.paper,
+        fontFamily: fonts.sansMedium, fontSize: 11, color: colors.forest,
+    },
+    description: { fontFamily: fonts.sans, fontSize: 13, lineHeight: 22, color: colors.inkSoft, marginTop: 4 },
+    statusText: { fontFamily: fonts.sans, fontSize: 14, color: colors.inkSoft, marginVertical: 24 },
+    emptyTitle: { width: "100%", maxWidth: 560, textAlign: "center", marginTop: 12, fontSize: 26, lineHeight: 34 },
+    emptyDescription: {
+        width: "100%", maxWidth: 560, fontFamily: fonts.sans, fontSize: 14,
+        lineHeight: 23, color: colors.inkSoft, textAlign: "center", marginTop: 8,
     },
 });
