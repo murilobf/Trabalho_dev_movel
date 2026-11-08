@@ -26,6 +26,7 @@ class Livro(db.Model):
 
     id = db.Column(db.Integer, primary_key = True)
     nome = db.Column(db.String(100), nullable=False)
+    autor = db.Column(db.String(100), nullable=False)
     descricao = db.Column(db.String(500), nullable=True)
     criado_em = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
@@ -33,6 +34,8 @@ class Livro(db.Model):
         return {
             "id": self.id,
             "nome": self.nome,
+            "autor": self.autor,
+            "descricao": self.descricao,
             "criado_em": self.criado_em.isoformat(),
         }
 
