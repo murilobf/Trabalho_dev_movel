@@ -5,6 +5,7 @@ import { colors, formStyles, catalogStyles } from "@/constants/theme";
 import { ScreenContainer } from "@/components/ScreenContainer";
 import { api } from "@/api/api";
 import { useRouter } from "expo-router";
+import { routePatternToRegex } from "expo-router/build/fork/getStateFromPath-forks";
 
 const FILTROS_INICIAIS = {
     nome: "",
@@ -123,7 +124,11 @@ export default function TelaLivros() {
             ) : (
                 <>
                     {livros.map((livro) => (
-                        <View style={[formStyles.content, formStyles.card, catalogStyles.bookCard]} key={livro.id}>
+                        <View 
+                            style={[formStyles.content, formStyles.card, catalogStyles.bookCard]} 
+                            key={livro.id}
+                            onTouchStart={() => {router.push(`/livro/${livro.id}`)}} //ref: https://stackoverflow.com/questions/41948900/react-native-detect-tap-on-view 
+                            >
                             <Text style={catalogStyles.bookTitle}>{livro.nome}</Text>
                             <Text style={catalogStyles.author}>{livro.autor}</Text>
                             {livro.genero ? (
