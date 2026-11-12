@@ -144,8 +144,6 @@ def register_routes(app):
     def criar_livro():
         data = request.get_json(silent=True)
 
-        print(data)
-
         if not isinstance(data, dict):
             return jsonify({"erro": "envie um objeto JSON válido"}), 400
 
@@ -221,8 +219,6 @@ def register_routes(app):
         autor = requisicao.get("autor")
         genero_id = requisicao.get("genero_id")
 
-        print(requisicao)
-
         if nome:
             condicoes.append("nome LIKE :nome")
             parametros["nome"] = f"%{nome}%"
@@ -243,12 +239,10 @@ def register_routes(app):
 
         if condicoes:
             sql += " WHERE " + " AND ".join(condicoes)
-            print(sql)
 
         livros = db.session.execute(
             text(sql), parametros
         ).mappings().all()
-        print(livros)
 
         query_relacao = text("SELECT g.nome, g.id AS genero_id, gl.id AS livro_id" \
         " FROM generos g" \
@@ -273,20 +267,14 @@ def register_routes(app):
 
 
     # READ (um específico)
-    @app.get("/livros/<string:livro_id>")
-    def obter_livro():
-
-        requisicao = request.args.to_dict()
-        livro_id = requisicao["id"]
-        genero_id = requisicao["genero"]
+    @app.get("/livros/<int:livro_id>")
+    def obter_livro(livro_id=None):
+        print("A")
 
         query = text("SELECT * FROM livros WHERE id = :id")
-        if(genero_id):
-            query += "AND genero_id = :genero_id"
 
         livro = db.session.execute(query, {
-            "id": livro_id,
-            "genero_id": genero_id
+            "id": livro_id
         }).mappings().first()
 
         if not livro:
@@ -294,12 +282,12 @@ def register_routes(app):
 
         query_generos = text("""SELECT g.id, g.nome
         FROM generos g 
-        JOIN generos_livro gl ON g.id = gl.genero_id
+        JOIN generosLivros gl ON g.id = gl.genero_id
         WHERE gl.livro_id = :livro_id""")
 
         generos = db.session.execute(query_generos, {
             "livro_id": livro_id
-        })
+        }).mappings().all()
 
         resultado = dict(livro)
         resultado["generos"] = [dict(g) for g in generos]
@@ -333,7 +321,6 @@ def register_routes(app):
     @app.post("/generos")
     def cria_genero():
         data = request.get_json(silent=True)
-        print(data)
         nome = data.get("nome")
 
         if not nome:

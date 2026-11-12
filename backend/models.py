@@ -29,6 +29,7 @@ class Livro(db.Model):
     autor = db.Column(db.String(100), nullable=False)
     descricao = db.Column(db.String(500), nullable=True)
     criado_em = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    aprovado = db.Column(db.Boolean, default=False, nullable=False)
 
     def to_dict(self):
         return {
@@ -37,6 +38,7 @@ class Livro(db.Model):
             "autor": self.autor,
             "descricao": self.descricao,
             "criado_em": self.criado_em.isoformat(),
+            "aprovado": self.aprovado,
         }
 
 class Genero(db.Model):
