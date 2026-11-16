@@ -294,3 +294,35 @@ export const catalogStyles = StyleSheet.create({
         lineHeight: 23, color: colors.inkSoft, textAlign: "center", marginTop: 8,
     },
 });
+
+// Layout compartilhado para páginas de detalhes de conteúdo.
+export const detailStyles = StyleSheet.create({
+    container: { paddingTop: spacing.md, paddingBottom: 56 },
+    content: { width: "100%", maxWidth: 960 },
+    backLink: {
+        minHeight: 44, flexDirection: "row", alignItems: "center",
+        alignSelf: "flex-start", gap: spacing.sm,
+    },
+    hero: {
+        paddingTop: 36, paddingBottom: 32,
+        borderBottomWidth: 1, borderBottomColor: colors.line,
+    },
+    title: { fontSize: 38, lineHeight: 46, marginBottom: spacing.md },
+    author: { fontSize: 16, lineHeight: 25 },
+    authorName: { color: colors.ink },
+    columns: {
+        flexDirection: "row", flexWrap: "wrap", alignItems: "flex-start",
+        columnGap: 48, rowGap: 32, paddingTop: 32,
+    },
+    mainColumn: { flexBasis: 460, flexGrow: 2, flexShrink: 1, minWidth: 0 },
+    sideColumn: { flexBasis: 220, flexGrow: 1, flexShrink: 1, minWidth: 0 },
+    sectionLabel: {
+        color: colors.inkSoft, letterSpacing: 1.5, marginBottom: spacing.lg,
+    },
+    description: { fontSize: 16, lineHeight: 28, color: colors.ink, marginTop: 0 },
+    genre: {
+        backgroundColor: "transparent", borderWidth: 1,
+        borderColor: colors.line, borderRadius: radius.sm,
+        fontSize: 12, paddingHorizontal: 12, paddingVertical: 7,
+    },
+});
