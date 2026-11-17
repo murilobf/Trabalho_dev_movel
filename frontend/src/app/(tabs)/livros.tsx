@@ -6,6 +6,19 @@ import { ScreenContainer } from "@/components/ScreenContainer";
 import { api } from "@/api/api";
 import { useRouter } from "expo-router";
 
+interface Genero {
+    id: number;
+    nome: string;
+}
+
+interface Livro {
+    id: number;
+    nome: string;
+    autor: string;
+    descricao?: string | null;
+    generos?: Genero[];
+}
+
 const FILTROS_INICIAIS = {
     nome: "",
     autor: "",
@@ -14,7 +27,7 @@ const FILTROS_INICIAIS = {
     genero_id: "", // "" = todos
 };
 
-const montarQueryString = (filtros:Object) => {
+const montarQueryString = (filtros: Record<string, string>) => {
     const partes = Object.entries(filtros)
         .filter(([, valor]) => valor !== "")
         .map(([chave, valor]) =>
@@ -24,13 +37,13 @@ const montarQueryString = (filtros:Object) => {
 };
 
 export default function TelaLivros() {
-    const [livros, setLivros] = useState([]);
-    const [generos, setGeneros] = useState([]);
+    const [livros, setLivros] = useState<Livro[]>([]);
+    const [generos, setGeneros] = useState<Genero[]>([]);
     const [filtros, setFiltros] = useState(FILTROS_INICIAIS);
     const [carregando, setCarregando] = useState(false);
     const router = useRouter();
 
-    const atualizarFiltro = (campo:string, valor:string) =>
+    const atualizarFiltro = (campo: string, valor: string) =>
         setFiltros((anterior) => ({ ...anterior, [campo]: valor }));
     const limparFiltros = () => setFiltros(FILTROS_INICIAIS);
 
@@ -60,7 +73,13 @@ export default function TelaLivros() {
     }, [filtros]);
 
     return (
-        <ScreenContainer scrollProps={{ contentContainerStyle: formStyles.container }}>
+        <ScreenContainer
+            scrollProps={{
+                contentContainerStyle: formStyles.container,
+                // Com o teclado aberto, o primeiro toque num card não deve ser "engolido" só para fechá-lo.
+                keyboardShouldPersistTaps: "handled",
+            }}
+        >
             <View style={[formStyles.content, formStyles.card, catalogStyles.filters]}>
                 <TextInput
                     style={formStyles.input}
@@ -92,12 +111,13 @@ export default function TelaLivros() {
                 </View>
                 <Picker
                     style={[formStyles.picker, catalogStyles.genrePicker]}
-                    selectedValue={filtros.genero}
-                    onValueChange={(v) => atualizarFiltro("genero_id", v)}
+                    // Antes era filtros.genero (campo que não existe): o seletor nunca mostrava a escolha.
+                    selectedValue={filtros.genero_id}
+                    onValueChange={(v) => atualizarFiltro("genero_id", String(v))}
                 >
                     <Picker.Item label="Todos os gêneros" value="" />
                     {generos.map((g) => (
-                        <Picker.Item key={g.id} label={g.nome} value={g.id} />
+                        <Picker.Item key={g.id} label={g.nome} value={String(g.id)} />
                     ))}
                 </Picker>
                 <Pressable onPress={limparFiltros} style={catalogStyles.secondaryButton}>
@@ -123,18 +143,36 @@ export default function TelaLivros() {
             ) : (
                 <>
                     {livros.map((livro) => (
-                        <View style={[formStyles.content, formStyles.card, catalogStyles.bookCard]} key={livro.id}>
+                        <Pressable
+                            key={livro.id}
+                            onPress={() => router.push(`/livro/${livro.id}`)}
+                            style={({ pressed }) => [
+                                formStyles.content,
+                                formStyles.card,
+                                catalogStyles.bookCard,
+                                pressed && formStyles.buttonPressed,
+                            ]}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Abrir ${livro.nome}`}
+                        >
                             <Text style={catalogStyles.bookTitle}>{livro.nome}</Text>
                             <Text style={catalogStyles.author}>{livro.autor}</Text>
-                            {livro.genero ? (
-                                <Text style={catalogStyles.badge}>{livro.genero}</Text>
+                            {/* A API devolve "generos" (lista), não "genero". */}
+                            {livro.generos && livro.generos.length > 0 ? (
+                                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                                    {livro.generos.map((g) => (
+                                        <Text key={g.id} style={catalogStyles.badge}>
+                                            {g.nome}
+                                        </Text>
+                                    ))}
+                                </View>
                             ) : null}
                             {livro.descricao ? (
                                 <Text numberOfLines={3} style={catalogStyles.description}>
                                     {livro.descricao}
                                 </Text>
                             ) : null}
-                        </View>
+                        </Pressable>
                     ))}
                 </>
             )}
