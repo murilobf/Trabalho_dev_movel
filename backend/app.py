@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from functools import wraps
 
 from models import Usuario, Genero, Livro, GenerosLivros, db
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.sql import text
 
@@ -156,6 +157,91 @@ def buscar_avaliacao_do_autor(avaliacao_id):
 ROTAS
 =========================================================================================
 """
+
+
+"""
+=========================================================================================
+PROGRESSO DE LEITURA: model e validação
+=========================================================================================
+"""
+
+STATUS_LEITURA = ("quero_ler", "lendo", "lido", "abandonado")
+
+
+class ProgressoLeitura(db.Model):
+    __tablename__ = "progressos_leitura"
+    __table_args__ = (
+        # Um registro de progresso por usuário e livro (para mudar, ele atualiza).
+        db.UniqueConstraint("usuario_id", "livro_id", name="uq_progresso_usuario_livro"),
+        db.CheckConstraint("pagina_atual >= 0", name="ck_progresso_pagina"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    usuario_id = db.Column(
+        db.Integer, db.ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False
+    )
+    livro_id = db.Column(
+        db.Integer, db.ForeignKey("livros.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    status = db.Column(db.String(20), nullable=False, default="lendo")
+    pagina_atual = db.Column(db.Integer, nullable=False, default=0)
+    total_paginas = db.Column(db.Integer, nullable=True)  # informado pelo usuário (o livro não tem)
+    criado_em = db.Column(db.DateTime, nullable=False, default=agora)
+    atualizado_em = db.Column(db.DateTime, nullable=False, default=agora, onupdate=agora)
+
+    usuario = db.relationship(
+        "Usuario", backref=db.backref("progressos", cascade="all, delete-orphan")
+    )
+    livro = db.relationship(
+        "Livro", backref=db.backref("progressos", cascade="all, delete-orphan")
+    )
+
+    @property
+    def percentual(self):
+        if self.status == "lido":
+            return 100
+        if self.total_paginas:
+            return min(100, round(self.pagina_atual * 100 / self.total_paginas))
+        return None
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "usuario_id": self.usuario_id,
+            "livro_id": self.livro_id,
+            "status": self.status,
+            "pagina_atual": self.pagina_atual,
+            "total_paginas": self.total_paginas,
+            "percentual": self.percentual,
+            "atualizado_em": self.atualizado_em.isoformat() if self.atualizado_em else None,
+        }
+
+
+def validar_progresso(data):
+    """Valida o JSON do progresso. Retorna (campos, erro). Só os campos enviados são alterados."""
+    if not isinstance(data, dict):
+        return None, "envie um objeto JSON válido"
+
+    campos = {}
+
+    if "status" in data:
+        if data["status"] not in STATUS_LEITURA:
+            return None, f"status deve ser um de: {', '.join(STATUS_LEITURA)}"
+        campos["status"] = data["status"]
+
+    if "pagina_atual" in data:
+        pagina = data["pagina_atual"]
+        if type(pagina) is not int or pagina < 0:
+            return None, "pagina_atual deve ser um inteiro maior ou igual a 0"
+        campos["pagina_atual"] = pagina
+
+    if "total_paginas" in data:
+        total = data["total_paginas"]
+        if total is not None and (type(total) is not int or total <= 0):
+            return None, "total_paginas deve ser um inteiro positivo"
+        campos["total_paginas"] = total
+
+    return campos, None
 
 
 def create_app():
@@ -455,6 +541,7 @@ def register_routes(app):
 
         # O SQLite não aplica ON DELETE CASCADE por padrão: remove as avaliações do livro antes.
         db.session.execute(text("DELETE FROM avaliacoes WHERE livro_id = :id"), {"id": livro_id})
+        db.session.execute(text("DELETE FROM progressos_leitura WHERE livro_id = :id"), {"id": livro_id})
 
         query = text("DELETE FROM livros WHERE id = :id")
         db.session.execute(query, {
@@ -658,6 +745,166 @@ def register_routes(app):
         db.session.delete(avaliacao)
         db.session.commit()
         return "", 204
+
+    """
+    =========================================================================================
+    Progresso de leitura e perfil público
+    =========================================================================================
+    """
+
+    # CREATE/UPDATE (cria ou atualiza o progresso do usuário logado neste livro)
+    @app.put("/livros/<int:livro_id>/progresso")
+    @login_obrigatorio
+    def registrar_progresso(livro_id):
+        if not db.session.get(Livro, livro_id):
+            return jsonify({"erro": "livro não encontrado"}), 404
+
+        campos, erro = validar_progresso(request.get_json(silent=True))
+        if erro:
+            return jsonify({"erro": erro}), 400
+
+        progresso = ProgressoLeitura.query.filter_by(
+            usuario_id=g.usuario.id, livro_id=livro_id
+        ).first()
+        criado = progresso is None
+        if criado:
+            progresso = ProgressoLeitura(usuario_id=g.usuario.id, livro_id=livro_id)
+            db.session.add(progresso)
+
+        for chave, valor in campos.items():
+            setattr(progresso, chave, valor)
+
+        # Defaults de coluna só são aplicados no INSERT; garante valores antes das checagens.
+        if progresso.status is None:
+            progresso.status = "lendo"
+        if progresso.pagina_atual is None:
+            progresso.pagina_atual = 0
+
+        if progresso.status == "lido" and progresso.total_paginas:
+            progresso.pagina_atual = progresso.total_paginas
+
+        if progresso.total_paginas and progresso.pagina_atual > progresso.total_paginas:
+            db.session.rollback()
+            return jsonify({"erro": "pagina_atual não pode ser maior que total_paginas"}), 400
+
+        progresso.atualizado_em = agora()
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            return jsonify({"erro": "não foi possível registrar o progresso"}), 409
+
+        return jsonify(progresso.to_dict()), 201 if criado else 200
+
+    # DELETE (remove o progresso do usuário logado neste livro)
+    @app.delete("/livros/<int:livro_id>/progresso")
+    @login_obrigatorio
+    def remover_progresso(livro_id):
+        progresso = ProgressoLeitura.query.filter_by(
+            usuario_id=g.usuario.id, livro_id=livro_id
+        ).first()
+        if not progresso:
+            return jsonify({"erro": "progresso não encontrado"}), 404
+
+        db.session.delete(progresso)
+        db.session.commit()
+        return "", 204
+
+    # READ (perfil público: avaliações, progresso de leitura e atividades de um usuário)
+    # Aberto a qualquer visitante. Nunca devolve e-mail nem senha_hash.
+    @app.get("/usuarios/<int:usuario_id>/perfil")
+    def obter_perfil_publico(usuario_id):
+        usuario = db.session.get(Usuario, usuario_id)
+        if not usuario:
+            return jsonify({"erro": "usuário não encontrado"}), 404
+
+        limite_avaliacoes, limite_progresso, limite_atividades = 20, 50, 20
+
+        # Avaliações mais recentes, com os dados do livro
+        linhas_avaliacoes = (
+            db.session.query(Avaliacao, Livro)
+            .join(Livro, Livro.id == Avaliacao.livro_id)
+            .filter(Avaliacao.usuario_id == usuario_id)
+            .order_by(Avaliacao.criado_em.desc(), Avaliacao.id.desc())
+            .limit(limite_avaliacoes)
+            .all()
+        )
+        avaliacoes = []
+        for avaliacao, livro in linhas_avaliacoes:
+            item = avaliacao.to_dict()
+            item["livro_nome"] = livro.nome
+            item["livro_autor"] = livro.autor
+            avaliacoes.append(item)
+
+        # Progresso de leitura, do mais recente para o mais antigo
+        linhas_progresso = (
+            db.session.query(ProgressoLeitura, Livro)
+            .join(Livro, Livro.id == ProgressoLeitura.livro_id)
+            .filter(ProgressoLeitura.usuario_id == usuario_id)
+            .order_by(ProgressoLeitura.atualizado_em.desc(), ProgressoLeitura.id.desc())
+            .limit(limite_progresso)
+            .all()
+        )
+        progresso = []
+        for registro, livro in linhas_progresso:
+            item = registro.to_dict()
+            item["livro_nome"] = livro.nome
+            item["livro_autor"] = livro.autor
+            progresso.append(item)
+
+        # Estatísticas (calculadas no banco, não só sobre as listas limitadas acima)
+        total_avaliacoes, nota_media = (
+            db.session.query(func.count(Avaliacao.id), func.avg(Avaliacao.nota))
+            .filter(Avaliacao.usuario_id == usuario_id)
+            .one()
+        )
+        por_status = dict(
+            db.session.query(ProgressoLeitura.status, func.count(ProgressoLeitura.id))
+            .filter(ProgressoLeitura.usuario_id == usuario_id)
+            .group_by(ProgressoLeitura.status)
+            .all()
+        )
+
+        # Atividades públicas: avaliações e atualizações de progresso, da mais recente à mais antiga
+        eventos = []
+        for avaliacao, livro in linhas_avaliacoes:
+            eventos.append((avaliacao.criado_em, {
+                "tipo": "avaliacao",
+                "livro_id": livro.id,
+                "livro_nome": livro.nome,
+                "nota": avaliacao.nota,
+            }))
+        for registro, livro in linhas_progresso:
+            eventos.append((registro.atualizado_em, {
+                "tipo": "progresso",
+                "livro_id": livro.id,
+                "livro_nome": livro.nome,
+                "status": registro.status,
+                "percentual": registro.percentual,
+            }))
+        eventos.sort(key=lambda e: e[0], reverse=True)
+        atividades = []
+        for data, evento in eventos[:limite_atividades]:
+            evento["data"] = data.isoformat() if data else None
+            atividades.append(evento)
+
+        return jsonify({
+            "usuario": {
+                "id": usuario.id,
+                "nome": usuario.nome,
+                "membro_desde": usuario.criado_em.isoformat() if usuario.criado_em else None,
+            },
+            "estatisticas": {
+                "total_avaliacoes": total_avaliacoes,
+                "nota_media": round(float(nota_media), 2) if nota_media is not None else None,
+                "lendo": por_status.get("lendo", 0),
+                "lidos": por_status.get("lido", 0),
+                "quero_ler": por_status.get("quero_ler", 0),
+            },
+            "avaliacoes": avaliacoes,
+            "progresso": progresso,
+            "atividades": atividades,
+        })
 
     """
     =========================================================================================

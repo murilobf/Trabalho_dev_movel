@@ -17,6 +17,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, fonts, radius, spacing } from '../constants/theme';
 
 // Itens que o theme.ts do projeto não tem; ficam locais para não alterar o tema.
@@ -53,8 +54,17 @@ interface ReviewPayload {
 // por exemplo 'http://192.168.16.41:5000'. Se o src/api/api.js já define a URL base, reaproveite.
 const API_URL = 'http://10.0.2.2:5000';
 
-// TODO: devolver o id do usuário logado (o mesmo que o app guarda após o login).
-const getUsuarioId = async (): Promise<number | null> => null;
+// O login guarda o usuário no AsyncStorage com a chave "dadosUsuario" (veja perfil.tsx).
+// É esse id que vai no header X-Usuario-Id; sem ele a API responde 401 "é necessário estar logado".
+const getUsuarioId = async (): Promise<number | null> => {
+  try {
+    const salvo = await AsyncStorage.getItem('dadosUsuario');
+    const id = salvo ? JSON.parse(salvo)?.id : null;
+    return typeof id === 'number' ? id : null;
+  } catch {
+    return null;
+  }
+};
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const usuarioId = await getUsuarioId();

@@ -5,8 +5,9 @@ Uso (na pasta do backend, onde ficam app.py e models.py):
 
     python seed.py
 
-Cria gêneros, livros (com seus gêneros), 3 usuários de teste e algumas avaliações
-espalhadas em datas diferentes (útil para testar a lista de avaliações e os relatórios).
+Cria gêneros, livros (com seus gêneros), 3 usuários de teste, algumas avaliações
+espalhadas em datas diferentes (útil para testar a lista de avaliações e os relatórios)
+e registros de progresso de leitura (útil para testar o perfil público).
 
 É seguro rodar mais de uma vez: o que já existe não é duplicado.
 Para recomeçar do zero, apague o arquivo instance/bookxd.db (ou bookxd.db) e rode de novo.
@@ -18,7 +19,7 @@ from datetime import timedelta
 
 from werkzeug.security import generate_password_hash
 
-from app import Avaliacao, agora, create_app
+from app import Avaliacao, ProgressoLeitura, agora, create_app
 from models import Genero, GenerosLivros, Livro, Usuario, db
 
 SENHA_PADRAO = "123456"
@@ -186,6 +187,20 @@ AVALIACOES = [
 ]
 
 
+# (email, livro, status, pagina_atual, total_paginas, dias_atrás)
+PROGRESSOS = [
+    ("ana@teste.com", "Duna", "lendo", 310, 680, 2),
+    ("ana@teste.com", "Cem Anos de Solidão", "quero_ler", 0, None, 6),
+    ("ana@teste.com", "Dom Casmurro", "lido", 256, 256, 140),
+    ("bruno@teste.com", "O Nome da Rosa", "lendo", 120, 560, 1),
+    ("bruno@teste.com", "Grande Sertão: Veredas", "abandonado", 90, 608, 35),
+    ("bruno@teste.com", "1984", "lido", 328, 328, 60),
+    ("carla@teste.com", "O Hobbit", "lendo", 95, None, 4),
+    ("carla@teste.com", "Admirável Mundo Novo", "quero_ler", 0, None, 10),
+    ("carla@teste.com", "Orgulho e Preconceito", "lido", 424, 424, 5),
+]
+
+
 def validar_dados():
     """Falha cedo se o seed tiver algum erro de digitação."""
     nomes_generos = set(GENEROS)
@@ -199,6 +214,10 @@ def validar_dados():
         assert email in emails and livro in nomes_livros, f"referência inválida: {email}, {livro}"
         assert 0.5 <= nota <= 5 and (nota * 2) % 1 == 0, f"nota inválida: {nota}"
         assert len(texto) <= 2000
+    for email, livro, status, pagina, total, _dias in PROGRESSOS:
+        assert email in emails and livro in nomes_livros, f"referência inválida: {email}, {livro}"
+        assert status in ("quero_ler", "lendo", "lido", "abandonado"), f"status inválido: {status}"
+        assert pagina >= 0 and (total is None or pagina <= total), f"página inválida: {livro}"
 
 
 def popular():
@@ -260,8 +279,31 @@ def popular():
         )
         novas_avaliacoes += 1
 
+    # Progresso de leitura
+    novos_progressos = 0
+    for email, nome_livro, status, pagina, total, dias in PROGRESSOS:
+        usuario, livro = usuarios[email], livros[nome_livro]
+        if ProgressoLeitura.query.filter_by(usuario_id=usuario.id, livro_id=livro.id).first():
+            continue
+        data = agora() - timedelta(days=dias)
+        db.session.add(
+            ProgressoLeitura(
+                usuario_id=usuario.id,
+                livro_id=livro.id,
+                status=status,
+                pagina_atual=pagina,
+                total_paginas=total,
+                criado_em=data,
+                atualizado_em=data,
+            )
+        )
+        novos_progressos += 1
+
     db.session.commit()
-    print(f"Livros novos: {novos_livros} | usuários novos: {novos_usuarios} | avaliações novas: {novas_avaliacoes}")
+    print(
+        f"Livros novos: {novos_livros} | usuários novos: {novos_usuarios} | "
+        f"avaliações novas: {novas_avaliacoes} | progressos novos: {novos_progressos}"
+    )
     print(f"Logins de teste: {', '.join(e for _, e in USUARIOS)} (senha: {SENHA_PADRAO})")
 
 
