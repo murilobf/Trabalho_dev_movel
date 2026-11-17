@@ -326,3 +326,57 @@ export const detailStyles = StyleSheet.create({
         fontSize: 12, paddingHorizontal: 12, paddingVertical: 7,
     },
 });
+
+export const managementStyles = StyleSheet.create({
+    toolbar: {
+        flexDirection: "row",
+        flexWrap: "wrap",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: spacing.md,
+        paddingVertical: spacing.xl,
+    },
+    row: {
+        flexDirection: "row",
+        flexWrap: "wrap",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: spacing.md,
+        paddingVertical: spacing.lg,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.line,
+    },
+    genreInfo: {
+        flexGrow: 1,
+        flexShrink: 1,
+        flexBasis: 220,
+        minWidth: 0,
+    },
+    actionButton: {
+        minHeight: 44,
+        alignItems: "center",
+        justifyContent: "center",
+        paddingHorizontal: spacing.md,
+        paddingVertical: spacing.sm,
+        borderRadius: radius.md,
+    },
+    error: {
+        fontFamily: fonts.sansMedium,
+        fontSize: 13,
+        lineHeight: 21,
+        color: colors.oxblood,
+        marginBottom: spacing.md,
+    },
+    overlay: {
+        flex: 1,
+        padding: spacing.xl,
+        backgroundColor: "rgba(35,29,22,0.55)",
+    },
+    dialog: {
+        width: "100%",
+        maxWidth: 460,
+    },
+    dialogActions: {
+        marginTop: spacing.sm,
+    },
+});

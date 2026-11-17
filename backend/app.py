@@ -397,21 +397,41 @@ def register_routes(app):
         return jsonify(dict(genero))
 
     # UPDATE
-    @app.put("/generos")
+    @app.put("/generos/<int:id>")
+    def atualiza_genero(id):
+        requisicao = request.get_json() or {}
+        print(id, requisicao)
+        nome = requisicao.get("nome")
 
-    # DELETE
-    @app.delete("/generos")
-    def deleta_genero():
-        requisicao = request.args.to_dict()
-        genero_id = requisicao['id']
+        if not nome:
+            return jsonify({"erro": "Nome não enviado"}), 400
 
-        query = text("DELETE FROM generos WHERE id = :id")
+
+        query = text("""UPDATE generos
+        SET nome = :nome
+        WHERE id = :id""")
+
         db.session.execute(query, {
-            "id":genero_id
+            "nome": nome,
+            "id": id
         })
 
         db.session.commit()
-        return jsonify({""}), 204
+
+        return "", 204
+    
+
+    # DELETE
+    @app.delete("/generos/<int:id>")
+    def deleta_genero(id):
+
+        query = text("DELETE FROM generos WHERE id = :id")
+        db.session.execute(query, {
+            "id": id
+        })
+
+        db.session.commit()
+        return "", 204
     
 
 
