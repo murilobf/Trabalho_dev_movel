@@ -5,7 +5,7 @@ import { colors, formStyles, catalogStyles } from "@/constants/theme";
 import { ScreenContainer } from "@/components/ScreenContainer";
 import { api } from "@/api/api";
 import { useRouter } from "expo-router";
-import { routePatternToRegex } from "expo-router/build/fork/getStateFromPath-forks";
+import { useAuth } from "@/contexts/AuthContext";
 
 const FILTROS_INICIAIS = {
     nome: "",
@@ -30,6 +30,10 @@ export default function TelaLivros() {
     const [filtros, setFiltros] = useState(FILTROS_INICIAIS);
     const [carregando, setCarregando] = useState(false);
     const router = useRouter();
+
+    const { usuario } = useAuth();
+
+    const admin = usuario?.cargo === "admin";
 
     const atualizarFiltro = (campo:string, valor:string) =>
         setFiltros((anterior) => ({ ...anterior, [campo]: valor }));
@@ -109,6 +113,7 @@ export default function TelaLivros() {
                     color={colors.oxblood}
                     title="Solicite um novo livro"
                     onPress={() => router.push("/telas/form_novo_livro")}
+                    disabled={!usuario}
                 />
             </View>
 

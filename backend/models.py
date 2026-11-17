@@ -10,6 +10,7 @@ class Usuario(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(120), nullable=False)
     email = db.Column(db.String(120), nullable=False, unique=True, index=True)
+    cargo = db.Column(db.String(30), nullable=False, default="usuario")
     senha_hash = db.Column(db.String(255), nullable=False)
     criado_em = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
@@ -18,6 +19,7 @@ class Usuario(db.Model):
             "id": self.id,
             "nome": self.nome,
             "email": self.email,
+            "cargo": self.cargo,
             "criado_em": self.criado_em.isoformat(),
         }
 

@@ -5,31 +5,16 @@ import { AppBar } from "../../components/AppBar";
 import { layout, typography } from "../../constants/theme";
 import { useRouter, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function PerfilScreen() {
   const router = useRouter()
 
-  const [dadosUsuario, setDadosUsuario] = useState<string | null>(null);
-  const logado = (dadosUsuario !== null)
-
-  useFocusEffect(
-    useCallback(() => {
-    async function carregar() {
-      try {
-        const salvo = await AsyncStorage.getItem("dadosUsuario");
-        setDadosUsuario(salvo ? JSON.parse(salvo) : null);
-
-      } catch {
-        setDadosUsuario(null);
-      }
-    }
-    carregar();
-  }, [])
-);
+  const { usuario, sair } = useAuth();
+  const logado = (usuario !== null)
 
   async function fazerLogout() {
-    await AsyncStorage.removeItem("dadosUsuario");
-    setDadosUsuario(null);
+    await sair()
   }
 
   return (
@@ -54,9 +39,9 @@ export default function PerfilScreen() {
         <Text style={layout.subtitle}>Confira dados sobre seu perfil</Text>
 
         <Text style={layout.fieldLabel}>Nome de usuário</Text>
-        <Text style={layout.fieldValue}>{dadosUsuario.nome ?? 'Desconhecido'}</Text>
+        <Text style={layout.fieldValue}>{usuario.nome ?? 'Desconhecido'}</Text>
         <Text style={layout.fieldLabel}>Email cadastrado</Text>
-        <Text style={layout.fieldValue}>{dadosUsuario.email ?? 'Desconhecido'}</Text>
+        <Text style={layout.fieldValue}>{usuario.email ?? 'Desconhecido'}</Text>
         <Button title="Logout" onPress={fazerLogout} />
       </>}
     </ScreenContainer>

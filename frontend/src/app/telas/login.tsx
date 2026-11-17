@@ -1,38 +1,41 @@
 import { Text, TextInput, Button } from "react-native";
 import { useState, useEffect } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { layout } from "../../constants/theme";
 import { ScreenContainer } from "../../components/ScreenContainer";
-import { api } from "../../api/api";
+import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "expo-router";
 
 export default function TelaLogin() {
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [erro, setErro] = useState(false);
-  const [carregando, setCarregando] = useState(false)
 
-  const router = useRouter()
+  const { usuario, entrar, autenticando } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (usuario) {
+      router.replace("/(tabs)/perfil");
+    }
+  }, [usuario, router]);
 
   async function fazerLogin() {
+    if (autenticando) return;
+
     setErro(false);
+
     try {
-      const usuario = await api.get(`/usuarios_email?email=${email}&senha=${senha}`);
-      const texto = JSON.stringify(usuario);
-
-      await AsyncStorage.setItem("dadosUsuario", texto);
-
-      router.replace("/(tabs)/perfil")
-    } 
-    catch (e) {
-      console.log("Erro no login:", e);
+      await entrar(email, senha);
+    } catch {
       setErro(true);
     }
   }
 
   return (
-    <ScreenContainer scrollProps={{ contentContainerStyle: [layout.center] }}>
-      {!carregando ? (
+    <ScreenContainer
+      scrollProps={{ contentContainerStyle: [layout.center] }}
+    >
+      {!autenticando ? (
         <>
           <Text style={layout.title}>Login</Text>
           <Text style={layout.subtitle}>Entre na sua conta</Text>
@@ -43,26 +46,34 @@ export default function TelaLogin() {
             placeholder="exemplo@email.com"
             onChangeText={setEmail}
             autoCapitalize="none"
+            autoCorrect={false}
             keyboardType="email-address"
           />
+
           <TextInput
             style={layout.input}
             value={senha}
-            placeholder="SenhaSecreta123"
+            placeholder="Sua senha"
             onChangeText={setSenha}
             secureTextEntry
           />
 
-          {erro && <Text>Crenciais incorretas ou erro no servidor</Text>}
+          {erro && (
+            <Text>
+              Não foi possível entrar. Verifique suas credenciais e conexão.
+            </Text>
+          )}
 
-          <Button title="Login" onPress={fazerLogin} />
+          <Button
+            title="Login"
+            onPress={fazerLogin}
+            disabled={autenticando || !email.trim() || !senha}
+          />
         </>
       ) : (
         <>
           <Text style={layout.title}>Carregando...</Text>
-          <Text style={layout.subtitle}>
-            Aguarde um momento
-          </Text>
+          <Text style={layout.subtitle}>Aguarde um momento</Text>
         </>
       )}
     </ScreenContainer>

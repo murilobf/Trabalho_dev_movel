@@ -39,63 +39,92 @@ def register_routes(app):
         nome = data.get("nome")
         email = data.get("email")
         senha = data.get("senha")
+        cargo = "usuario"
 
         if not nome or not email or not senha:
             return jsonify({"erro": "nome, email e senha são obrigatórios"}), 400
 
-        if Usuario.query.filter_by(email=email).first():
+        query_select = text("""
+        SELECT * 
+        FROM usuarios
+        WHERE email = :email
+        """)
+
+        usuario = db.session.execute(query_select, {
+            "email": email
+        }).mappings().first()
+
+        if usuario:
             return jsonify({"erro": "já existe um usuário com esse email"}), 409
 
-        usuario = Usuario(
-            nome=nome,
-            email=email,
-            senha_hash=generate_password_hash(senha),
-        )
-        db.session.add(usuario)
+        senha_hash = generate_password_hash(senha)
+
+        query_create = text("INSERT INTO usuarios (nome, email, senha_hash, cargo) VALUES (:nome, :email, :senha_hash, :cargo)")
+        db.session.execute(query_create, {
+            "nome": nome,
+            "email": email,
+            "senha_hash": senha_hash,
+            "cargo": cargo
+        })
+
         db.session.commit()
 
-        return jsonify(usuario.to_dict()), 201
+        return jsonify({"nome":nome, "email":email, "cargo":cargo}), 201
 
     # READ (lista)
     @app.get("/usuarios")
-    def listar_usuarios():
-        usuarios = Usuario.query.order_by(Usuario.id).all()
+    def listar_usuarios():  
+        usuarios = db.session.execute(text("SELECT nome, email, cargo FROM usuarios")).mappings().all()
         return jsonify([u.to_dict() for u in usuarios])
 
     # READ (um usuário)
     @app.get("/usuarios/<int:usuario_id>")
     def obter_usuario(usuario_id):
-        usuario = Usuario.query.get(usuario_id)
+        query = text("SELECT nome, email, cargo FROM usuarios WHERE id = :id")
+        usuario = db.session.execute(query, {"id": usuario_id}).mappings().first()
         if not usuario:
-            return jsonify({"erro": "usuário não encontrado"}), 404
-        return jsonify(usuario.to_dict())
-
-    # READ (por email)
-    @app.get("/usuarios_email")
-    def obter_usuario_email():
-        email = ''
-        senha = ''
-
-        requisicao = request.args.to_dict()
-        email = requisicao['email']
-        senha = requisicao['senha']
-
-        query = text("SELECT * FROM usuarios WHERE email = :email")
-        usuario = db.session.execute(query, {
-            "email": email,
-        }).mappings().first()
-
-        senha_correta = False
-        try:
-            senha_correta = check_password_hash(usuario["senha_hash"], senha)
-        
-        except:
-            senha_correta = False
-        
-        if not usuario or not senha_correta:
             return jsonify({"erro": "usuário não encontrado"}), 404
         
         return jsonify(dict(usuario))
+
+    # READ (por email)
+    @app.post("/login")
+    def login():
+        data = request.get_json(silent=True)
+
+        if not isinstance(data, dict):
+            return jsonify({"erro": "envie um objeto JSON válido"}), 400
+
+        email = data.get("email")
+        senha = data.get("senha")
+
+        if (
+            not isinstance(email, str)
+            or not email.strip()
+            or not isinstance(senha, str)
+            or not senha
+        ):
+            return jsonify({"erro": "email e senha são obrigatórios"}), 400
+
+        query = text("""
+            SELECT id, nome, email, cargo, senha_hash
+            FROM usuarios
+            WHERE email = :email
+        """)
+
+        usuario = db.session.execute(
+            query, {"email": email.strip()}
+        ).mappings().first()
+
+        if not usuario or not check_password_hash(usuario["senha_hash"], senha):
+            return jsonify({"erro": "email ou senha inválidos"}), 401
+
+        return jsonify({
+            "id": usuario["id"],
+            "nome": usuario["nome"],
+            "email": usuario["email"],
+            "cargo": usuario["cargo"],
+        })
 
     # UPDATE
     @app.put("/usuarios/<int:usuario_id>")
