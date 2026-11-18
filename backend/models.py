@@ -31,7 +31,7 @@ class Livro(db.Model):
     autor = db.Column(db.String(100), nullable=False)
     descricao = db.Column(db.String(500), nullable=True)
     criado_em = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    aprovado = db.Column(db.Boolean, default=False, nullable=False)
+    aprovado = db.Column(db.Boolean, default=False, nullable=False) 
 
     def to_dict(self):
         return {

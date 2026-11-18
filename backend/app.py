@@ -1,10 +1,248 @@
-from flask import Flask, jsonify, request
+from flask import Flask, g, jsonify, request
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 from collections import defaultdict
+from datetime import datetime, timezone
+from functools import wraps
 
 from models import Usuario, Genero, Livro, GenerosLivros, db
+from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.sql import text
+
+"""
+=========================================================================================
+AVALIAÇÕES: model e funções auxiliares
+=========================================================================================
+"""
+
+NOTA_MIN = 0.5
+NOTA_MAX = 5.0
+TEXTO_MAX = 2000
+
+
+def agora():
+    return datetime.now(timezone.utc)
+
+
+"""
+=========================================================================================
+MODEL
+=========================================================================================
+"""
+
+
+class Avaliacao(db.Model):
+    __tablename__ = "avaliacoes"
+    __table_args__ = (
+        # Um usuário avalia cada livro uma única vez (para mudar, ele edita).
+        db.UniqueConstraint("usuario_id", "livro_id", name="uq_avaliacao_usuario_livro"),
+        db.CheckConstraint("nota >= 0.5 AND nota <= 5", name="ck_avaliacao_nota"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    # usuario_id não precisa de índice próprio: a UniqueConstraint (usuario_id, livro_id)
+    # já serve para buscas por usuario_id. O índice de livro_id acelera listagens e relatórios.
+    usuario_id = db.Column(
+        db.Integer, db.ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False
+    )
+    livro_id = db.Column(
+        db.Integer, db.ForeignKey("livros.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    nota = db.Column(db.Float, nullable=False)  # 0.5 a 5, em passos de 0.5
+    texto = db.Column(db.Text, nullable=False, default="")
+    contem_spoilers = db.Column(db.Boolean, nullable=False, default=False)
+    criado_em = db.Column(db.DateTime, nullable=False, default=agora)
+    atualizado_em = db.Column(db.DateTime, nullable=False, default=agora, onupdate=agora)
+
+    # Os backrefs criam Usuario.avaliacoes e Livro.avaliacoes sem editar o models.py.
+    # Com cascade="all, delete-orphan", apagar um usuário (ou livro) pelo ORM, como faz
+    # deletar_usuario, apaga também as avaliações dele, mesmo com o SQLite sem FKs ativas.
+    usuario = db.relationship(
+        "Usuario", backref=db.backref("avaliacoes", cascade="all, delete-orphan")
+    )
+    livro = db.relationship(
+        "Livro", backref=db.backref("avaliacoes", cascade="all, delete-orphan")
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "usuario_id": self.usuario_id,
+            "livro_id": self.livro_id,
+            "nota": self.nota,
+            "texto": self.texto,
+            "contem_spoilers": self.contem_spoilers,
+            "criado_em": self.criado_em.isoformat() if self.criado_em else None,
+            "atualizado_em": self.atualizado_em.isoformat() if self.atualizado_em else None,
+        }
+
+
+"""
+=========================================================================================
+AUXILIARES
+=========================================================================================
+"""
+
+
+def usuario_atual():
+    """Lê o usuário logado a partir do header X-Usuario-Id. Retorna None se inválido."""
+    valor = request.headers.get("X-Usuario-Id", "")
+    if not valor.isdigit():
+        return None
+    return db.session.get(Usuario, int(valor))
+
+
+def login_obrigatorio(funcao):
+    @wraps(funcao)
+    def envolvida(*args, **kwargs):
+        usuario = usuario_atual()
+        if not usuario:
+            return jsonify({"erro": "é necessário estar logado"}), 401
+        g.usuario = usuario
+        return funcao(*args, **kwargs)
+
+    return envolvida
+
+
+def validar_corpo(data, criando):
+    """
+    Valida o JSON de criação/edição. Retorna (campos, erro).
+    Na criação a nota é obrigatória; na edição só os campos enviados são alterados.
+    """
+    if not isinstance(data, dict):
+        return None, "envie um objeto JSON válido"
+
+    campos = {}
+
+    if criando or "nota" in data:
+        nota = data.get("nota")
+        if isinstance(nota, bool) or not isinstance(nota, (int, float)):
+            return None, "nota é obrigatória e deve ser um número"
+        if not (NOTA_MIN <= nota <= NOTA_MAX) or (nota * 2) % 1 != 0:
+            return None, "nota deve estar entre 0.5 e 5, em passos de 0.5"
+        campos["nota"] = float(nota)
+
+    if "texto" in data:
+        texto = data["texto"] if data["texto"] is not None else ""
+        if not isinstance(texto, str):
+            return None, "texto deve ser uma string"
+        texto = texto.strip()
+        if len(texto) > TEXTO_MAX:
+            return None, f"texto deve ter no máximo {TEXTO_MAX} caracteres"
+        campos["texto"] = texto
+
+    if "contem_spoilers" in data:
+        if not isinstance(data["contem_spoilers"], bool):
+            return None, "contem_spoilers deve ser verdadeiro ou falso"
+        campos["contem_spoilers"] = data["contem_spoilers"]
+
+    return campos, None
+
+
+def buscar_avaliacao_do_autor(avaliacao_id):
+    """
+    Retorna (avaliacao, resposta_de_erro). Só o autor pode editar/excluir a própria avaliação.
+    """
+    avaliacao = db.session.get(Avaliacao, avaliacao_id)
+    if not avaliacao:
+        return None, (jsonify({"erro": "avaliação não encontrada"}), 404)
+    if avaliacao.usuario_id != g.usuario.id:
+        return None, (jsonify({"erro": "você só pode alterar suas próprias avaliações"}), 403)
+    return avaliacao, None
+
+
+"""
+=========================================================================================
+ROTAS
+=========================================================================================
+"""
+
+
+"""
+=========================================================================================
+PROGRESSO DE LEITURA: model e validação
+=========================================================================================
+"""
+
+STATUS_LEITURA = ("quero_ler", "lendo", "lido", "abandonado")
+
+
+class ProgressoLeitura(db.Model):
+    __tablename__ = "progressos_leitura"
+    __table_args__ = (
+        # Um registro de progresso por usuário e livro (para mudar, ele atualiza).
+        db.UniqueConstraint("usuario_id", "livro_id", name="uq_progresso_usuario_livro"),
+        db.CheckConstraint("pagina_atual >= 0", name="ck_progresso_pagina"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    usuario_id = db.Column(
+        db.Integer, db.ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False
+    )
+    livro_id = db.Column(
+        db.Integer, db.ForeignKey("livros.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    status = db.Column(db.String(20), nullable=False, default="lendo")
+    pagina_atual = db.Column(db.Integer, nullable=False, default=0)
+    total_paginas = db.Column(db.Integer, nullable=True)  # informado pelo usuário (o livro não tem)
+    criado_em = db.Column(db.DateTime, nullable=False, default=agora)
+    atualizado_em = db.Column(db.DateTime, nullable=False, default=agora, onupdate=agora)
+
+    usuario = db.relationship(
+        "Usuario", backref=db.backref("progressos", cascade="all, delete-orphan")
+    )
+    livro = db.relationship(
+        "Livro", backref=db.backref("progressos", cascade="all, delete-orphan")
+    )
+
+    @property
+    def percentual(self):
+        if self.status == "lido":
+            return 100
+        if self.total_paginas:
+            return min(100, round(self.pagina_atual * 100 / self.total_paginas))
+        return None
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "usuario_id": self.usuario_id,
+            "livro_id": self.livro_id,
+            "status": self.status,
+            "pagina_atual": self.pagina_atual,
+            "total_paginas": self.total_paginas,
+            "percentual": self.percentual,
+            "atualizado_em": self.atualizado_em.isoformat() if self.atualizado_em else None,
+        }
+
+
+def validar_progresso(data):
+    """Valida o JSON do progresso. Retorna (campos, erro). Só os campos enviados são alterados."""
+    if not isinstance(data, dict):
+        return None, "envie um objeto JSON válido"
+
+    campos = {}
+
+    if "status" in data:
+        if data["status"] not in STATUS_LEITURA:
+            return None, f"status deve ser um de: {', '.join(STATUS_LEITURA)}"
+        campos["status"] = data["status"]
+
+    if "pagina_atual" in data:
+        pagina = data["pagina_atual"]
+        if type(pagina) is not int or pagina < 0:
+            return None, "pagina_atual deve ser um inteiro maior ou igual a 0"
+        campos["pagina_atual"] = pagina
+
+    if "total_paginas" in data:
+        total = data["total_paginas"]
+        if total is not None and (type(total) is not int or total <= 0):
+            return None, "total_paginas deve ser um inteiro positivo"
+        campos["total_paginas"] = total
+
+    return campos, None
+
 
 def create_app():
     app = Flask(__name__)
@@ -209,11 +447,13 @@ def register_routes(app):
                 db.session.rollback()
                 return jsonify({"erro": "um ou mais gêneros não existem"}), 400
 
-            query_livro = text("INSERT INTO livros (nome, autor, descricao) VALUES (:nome, :autor, :descricao) RETURNING id")
+            ## default de aprovado é False!! mudar depois
+            query_livro = text("INSERT INTO livros (nome, autor, descricao, aprovado) VALUES (:nome, :autor, :descricao, :aprovado) RETURNING id")
             livro_id = db.session.execute(query_livro, {
                 "nome": nome,
                 "autor": autor,
-                "descricao": descricao
+                "descricao": descricao,
+                "aprovado": True
             }).scalar()
 
             query_livro_genero = text("INSERT INTO generosLivros (livro_id, genero_id) VALUES (:livro_id, :genero_id)")
@@ -297,30 +537,22 @@ def register_routes(app):
 
     # READ (um específico)
     @app.get("/livros/<int:livro_id>")
-    def obter_livro(livro_id=None):
-        print("A")
-
-        query = text("SELECT * FROM livros WHERE id = :id")
-
-        livro = db.session.execute(query, {
-            "id": livro_id
-        }).mappings().first()
+    def obter_livro(livro_id):
+        livro = db.session.execute(
+            text("SELECT * FROM livros WHERE id = :id"), {"id": livro_id}
+        ).mappings().first()
 
         if not livro:
-                return jsonify({"erro": "Livro não encontrado"}), 404
+            return jsonify({"erro": "Livro não encontrado"}), 404
 
-        query_generos = text("""SELECT g.id, g.nome
-        FROM generos g 
-        JOIN generosLivros gl ON g.id = gl.genero_id
-        WHERE gl.livro_id = :livro_id""")
-
-        generos = db.session.execute(query_generos, {
-            "livro_id": livro_id
-        }).mappings().all()
+        generos = db.session.execute(text("""
+            SELECT g.id, g.nome
+            FROM generos g
+            JOIN generosLivros gl ON g.id = gl.genero_id
+            WHERE gl.livro_id = :livro_id"""), {"livro_id": livro_id}).mappings().all()
 
         resultado = dict(livro)
         resultado["generos"] = [dict(g) for g in generos]
-                
         return jsonify(resultado)
 
     #UPDATE
@@ -332,13 +564,17 @@ def register_routes(app):
         requisicao = request.args.to_dict()
         livro_id = requisicao['id']
 
+        # O SQLite não aplica ON DELETE CASCADE por padrão: remove as avaliações do livro antes.
+        db.session.execute(text("DELETE FROM avaliacoes WHERE livro_id = :id"), {"id": livro_id})
+        db.session.execute(text("DELETE FROM progressos_leitura WHERE livro_id = :id"), {"id": livro_id})
+
         query = text("DELETE FROM livros WHERE id = :id")
         db.session.execute(query, {
             "id":livro_id
         })
 
         db.session.commit()
-        return jsonify({""}), 204
+        return "", 204
 
     """
     =========================================================================================
@@ -414,6 +650,285 @@ def register_routes(app):
         return jsonify({""}), 204
     
 
+
+    """
+    =========================================================================================
+    CRUD Avaliações
+    =========================================================================================
+    """
+
+
+    # CREATE
+    @app.post("/livros/<int:livro_id>/avaliacoes")
+    @login_obrigatorio
+    def criar_avaliacao(livro_id):
+        if not db.session.get(Livro, livro_id):
+            return jsonify({"erro": "livro não encontrado"}), 404
+
+        campos, erro = validar_corpo(request.get_json(silent=True), criando=True)
+        if erro:
+            return jsonify({"erro": erro}), 400
+
+        if Avaliacao.query.filter_by(usuario_id=g.usuario.id, livro_id=livro_id).first():
+            return jsonify({"erro": "você já avaliou este livro, edite a avaliação existente"}), 409
+
+        avaliacao = Avaliacao(usuario_id=g.usuario.id, livro_id=livro_id, **campos)
+        db.session.add(avaliacao)
+        try:
+            db.session.commit()
+        except IntegrityError:
+            # Duas requisições simultâneas passaram pela checagem acima.
+            db.session.rollback()
+            return jsonify({"erro": "você já avaliou este livro, edite a avaliação existente"}), 409
+
+        return jsonify(avaliacao.to_dict()), 201
+
+    # READ (avaliação do usuário logado para um livro; retorna null se não houver)
+    @app.get("/livros/<int:livro_id>/avaliacoes/minha")
+    @login_obrigatorio
+    def obter_minha_avaliacao(livro_id):
+        avaliacao = Avaliacao.query.filter_by(usuario_id=g.usuario.id, livro_id=livro_id).first()
+        return jsonify(avaliacao.to_dict() if avaliacao else None)
+
+    # READ (lista pública de avaliações de um livro, aberta a usuários deslogados)
+    @app.get("/livros/<int:livro_id>/avaliacoes")
+    def listar_avaliacoes_do_livro(livro_id):
+        if not db.session.get(Livro, livro_id):
+            return jsonify({"erro": "livro não encontrado"}), 404
+
+        try:
+            limite = min(max(int(request.args.get("limite", 20)), 1), 100)
+            deslocamento = max(int(request.args.get("deslocamento", 0)), 0)
+        except ValueError:
+            return jsonify({"erro": "limite e deslocamento devem ser inteiros"}), 400
+
+        consulta = (
+            db.session.query(Avaliacao, Usuario.nome)
+            .join(Usuario, Usuario.id == Avaliacao.usuario_id)
+            .filter(Avaliacao.livro_id == livro_id)
+        )
+        total = consulta.count()
+        linhas = (
+            consulta.order_by(Avaliacao.criado_em.desc(), Avaliacao.id.desc())
+            .limit(limite)
+            .offset(deslocamento)
+            .all()
+        )
+
+        avaliacoes = []
+        for avaliacao, nome_usuario in linhas:
+            item = avaliacao.to_dict()
+            item["usuario_nome"] = nome_usuario
+            avaliacoes.append(item)
+
+        return jsonify({"total": total, "avaliacoes": avaliacoes})
+
+    # READ (uma avaliação)
+    @app.get("/avaliacoes/<int:avaliacao_id>")
+    def obter_avaliacao(avaliacao_id):
+        linha = (
+            db.session.query(Avaliacao, Usuario.nome)
+            .join(Usuario, Usuario.id == Avaliacao.usuario_id)
+            .filter(Avaliacao.id == avaliacao_id)
+            .first()
+        )
+        if not linha:
+            return jsonify({"erro": "avaliação não encontrada"}), 404
+
+        avaliacao, nome_usuario = linha
+        item = avaliacao.to_dict()
+        item["usuario_nome"] = nome_usuario
+        return jsonify(item)
+
+    # UPDATE
+    @app.put("/avaliacoes/<int:avaliacao_id>")
+    @login_obrigatorio
+    def atualizar_avaliacao(avaliacao_id):
+        avaliacao, erro_resposta = buscar_avaliacao_do_autor(avaliacao_id)
+        if erro_resposta:
+            return erro_resposta
+
+        campos, erro = validar_corpo(request.get_json(silent=True), criando=False)
+        if erro:
+            return jsonify({"erro": erro}), 400
+
+        for chave, valor in campos.items():
+            setattr(avaliacao, chave, valor)
+
+        db.session.commit()
+        return jsonify(avaliacao.to_dict())
+
+    # DELETE
+    @app.delete("/avaliacoes/<int:avaliacao_id>")
+    @login_obrigatorio
+    def deletar_avaliacao(avaliacao_id):
+        avaliacao, erro_resposta = buscar_avaliacao_do_autor(avaliacao_id)
+        if erro_resposta:
+            return erro_resposta
+
+        db.session.delete(avaliacao)
+        db.session.commit()
+        return "", 204
+
+    """
+    =========================================================================================
+    Progresso de leitura e perfil público
+    =========================================================================================
+    """
+
+    # CREATE/UPDATE (cria ou atualiza o progresso do usuário logado neste livro)
+    @app.put("/livros/<int:livro_id>/progresso")
+    @login_obrigatorio
+    def registrar_progresso(livro_id):
+        if not db.session.get(Livro, livro_id):
+            return jsonify({"erro": "livro não encontrado"}), 404
+
+        campos, erro = validar_progresso(request.get_json(silent=True))
+        if erro:
+            return jsonify({"erro": erro}), 400
+
+        progresso = ProgressoLeitura.query.filter_by(
+            usuario_id=g.usuario.id, livro_id=livro_id
+        ).first()
+        criado = progresso is None
+        if criado:
+            progresso = ProgressoLeitura(usuario_id=g.usuario.id, livro_id=livro_id)
+            db.session.add(progresso)
+
+        for chave, valor in campos.items():
+            setattr(progresso, chave, valor)
+
+        # Defaults de coluna só são aplicados no INSERT; garante valores antes das checagens.
+        if progresso.status is None:
+            progresso.status = "lendo"
+        if progresso.pagina_atual is None:
+            progresso.pagina_atual = 0
+
+        if progresso.status == "lido" and progresso.total_paginas:
+            progresso.pagina_atual = progresso.total_paginas
+
+        if progresso.total_paginas and progresso.pagina_atual > progresso.total_paginas:
+            db.session.rollback()
+            return jsonify({"erro": "pagina_atual não pode ser maior que total_paginas"}), 400
+
+        progresso.atualizado_em = agora()
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            return jsonify({"erro": "não foi possível registrar o progresso"}), 409
+
+        return jsonify(progresso.to_dict()), 201 if criado else 200
+
+    # DELETE (remove o progresso do usuário logado neste livro)
+    @app.delete("/livros/<int:livro_id>/progresso")
+    @login_obrigatorio
+    def remover_progresso(livro_id):
+        progresso = ProgressoLeitura.query.filter_by(
+            usuario_id=g.usuario.id, livro_id=livro_id
+        ).first()
+        if not progresso:
+            return jsonify({"erro": "progresso não encontrado"}), 404
+
+        db.session.delete(progresso)
+        db.session.commit()
+        return "", 204
+
+    # READ (perfil público: avaliações, progresso de leitura e atividades de um usuário)
+    # Aberto a qualquer visitante. Nunca devolve e-mail nem senha_hash.
+    @app.get("/usuarios/<int:usuario_id>/perfil")
+    def obter_perfil_publico(usuario_id):
+        usuario = db.session.get(Usuario, usuario_id)
+        if not usuario:
+            return jsonify({"erro": "usuário não encontrado"}), 404
+
+        limite_avaliacoes, limite_progresso, limite_atividades = 20, 50, 20
+
+        # Avaliações mais recentes, com os dados do livro
+        linhas_avaliacoes = (
+            db.session.query(Avaliacao, Livro)
+            .join(Livro, Livro.id == Avaliacao.livro_id)
+            .filter(Avaliacao.usuario_id == usuario_id)
+            .order_by(Avaliacao.criado_em.desc(), Avaliacao.id.desc())
+            .limit(limite_avaliacoes)
+            .all()
+        )
+        avaliacoes = []
+        for avaliacao, livro in linhas_avaliacoes:
+            item = avaliacao.to_dict()
+            item["livro_nome"] = livro.nome
+            item["livro_autor"] = livro.autor
+            avaliacoes.append(item)
+
+        # Progresso de leitura, do mais recente para o mais antigo
+        linhas_progresso = (
+            db.session.query(ProgressoLeitura, Livro)
+            .join(Livro, Livro.id == ProgressoLeitura.livro_id)
+            .filter(ProgressoLeitura.usuario_id == usuario_id)
+            .order_by(ProgressoLeitura.atualizado_em.desc(), ProgressoLeitura.id.desc())
+            .limit(limite_progresso)
+            .all()
+        )
+        progresso = []
+        for registro, livro in linhas_progresso:
+            item = registro.to_dict()
+            item["livro_nome"] = livro.nome
+            item["livro_autor"] = livro.autor
+            progresso.append(item)
+
+        # Estatísticas (calculadas no banco, não só sobre as listas limitadas acima)
+        total_avaliacoes, nota_media = (
+            db.session.query(func.count(Avaliacao.id), func.avg(Avaliacao.nota))
+            .filter(Avaliacao.usuario_id == usuario_id)
+            .one()
+        )
+        por_status = dict(
+            db.session.query(ProgressoLeitura.status, func.count(ProgressoLeitura.id))
+            .filter(ProgressoLeitura.usuario_id == usuario_id)
+            .group_by(ProgressoLeitura.status)
+            .all()
+        )
+
+        # Atividades públicas: avaliações e atualizações de progresso, da mais recente à mais antiga
+        eventos = []
+        for avaliacao, livro in linhas_avaliacoes:
+            eventos.append((avaliacao.criado_em, {
+                "tipo": "avaliacao",
+                "livro_id": livro.id,
+                "livro_nome": livro.nome,
+                "nota": avaliacao.nota,
+            }))
+        for registro, livro in linhas_progresso:
+            eventos.append((registro.atualizado_em, {
+                "tipo": "progresso",
+                "livro_id": livro.id,
+                "livro_nome": livro.nome,
+                "status": registro.status,
+                "percentual": registro.percentual,
+            }))
+        eventos.sort(key=lambda e: e[0], reverse=True)
+        atividades = []
+        for data, evento in eventos[:limite_atividades]:
+            evento["data"] = data.isoformat() if data else None
+            atividades.append(evento)
+
+        return jsonify({
+            "usuario": {
+                "id": usuario.id,
+                "nome": usuario.nome,
+                "membro_desde": usuario.criado_em.isoformat() if usuario.criado_em else None,
+            },
+            "estatisticas": {
+                "total_avaliacoes": total_avaliacoes,
+                "nota_media": round(float(nota_media), 2) if nota_media is not None else None,
+                "lendo": por_status.get("lendo", 0),
+                "lidos": por_status.get("lido", 0),
+                "quero_ler": por_status.get("quero_ler", 0),
+            },
+            "avaliacoes": avaliacoes,
+            "progresso": progresso,
+            "atividades": atividades,
+        })
 
     """
     =========================================================================================
