@@ -15,7 +15,11 @@ export default function TelaAdmin(){
     return(
         <ScreenContainer>
             <Pressable onPress={() => router.push("/telas/gestao_generos")} style={{ marginTop: 16 }}>
-                            <Text style={[typography.body, { color: "#7C2A34" }]}>Fazer Login →</Text>
+                            <Text style={[typography.body, { color: "#7C2A34" }]}>Gêneros</Text>
+            </Pressable>
+
+            <Pressable onPress={() => router.push("/telas/gestao_pessoas")} style={{ marginTop: 16 }}>
+                            <Text style={[typography.body, { color: "#7C2A34" }]}>Usuários</Text>
             </Pressable>
         </ScreenContainer>
     )

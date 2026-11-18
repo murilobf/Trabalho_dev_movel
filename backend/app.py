@@ -74,8 +74,8 @@ def register_routes(app):
     # READ (lista)
     @app.get("/usuarios")
     def listar_usuarios():  
-        usuarios = db.session.execute(text("SELECT nome, email, cargo FROM usuarios")).mappings().all()
-        return jsonify([u.to_dict() for u in usuarios])
+        usuarios = db.session.execute(text("SELECT id, nome, email, cargo FROM usuarios")).mappings().all()
+        return jsonify([dict(u) for u in usuarios])
 
     # READ (um usuário)
     @app.get("/usuarios/<int:usuario_id>")
@@ -129,26 +129,55 @@ def register_routes(app):
     # UPDATE
     @app.put("/usuarios/<int:usuario_id>")
     def atualizar_usuario(usuario_id):
-        usuario = Usuario.query.get(usuario_id)
+        values = []
+        params = {"usuario_id": usuario_id}
+
+        requisicao = request.get_json(silent=True) or {}
+        email = requisicao.get("email")
+        nome = requisicao.get("nome")
+        senha = requisicao.get("senha")
+        cargo = requisicao.get("cargo")
+
+        usuario = db.session.execute(text("SELECT * FROM usuarios WHERE id = :usuario_id"), {
+            "usuario_id": usuario_id
+        }).mappings().first()
+
         if not usuario:
             return jsonify({"erro": "usuário não encontrado"}), 404
 
-        data = request.get_json(silent=True) or {}
-
-        novo_email = data.get("email")
-        if novo_email and novo_email != usuario.email:
-            if Usuario.query.filter_by(email=novo_email).first():
+        if email and email != usuario["email"]:
+            existente = db.session.execute(text("SELECT * FROM usuarios WHERE email=:email"), {
+                "email": email
+            }).mappings().first()
+            
+            if existente:
                 return jsonify({"erro": "já existe um usuário com esse email"}), 409
-            usuario.email = novo_email
+            
+            values.append("email = :email")
+            params["email"] = email
 
-        if data.get("nome"):
-            usuario.nome = data["nome"]
+        if nome:
+            values.append("nome = :nome")
+            params["nome"] = nome
 
-        if data.get("senha"):
-            usuario.senha_hash = generate_password_hash(data["senha"])
+        if senha:
+            values.append("senha_hash = :senha_hash")
+            params["senha_hash"] = generate_password_hash(senha)
+
+        if cargo:
+            values.append("cargo = :cargo")
+            params["cargo"] = cargo
+
+        if not values:
+            return jsonify({"erro": "nenhum campo para atualizar"}), 400
+
+        query = "UPDATE usuarios SET " + ", ".join(values) + " WHERE id = :usuario_id"
+
+        db.session.execute(text(query), params)
 
         db.session.commit()
-        return jsonify(usuario.to_dict())
+
+        return "", 204
 
     # DELETE
     @app.delete("/usuarios/<int:usuario_id>")

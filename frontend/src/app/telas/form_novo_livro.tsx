@@ -1,5 +1,4 @@
 import { Text, TextInput, Pressable, View } from "react-native";
-import { Picker } from "@react-native-picker/picker";
 import { useEffect, useState } from "react";
 import { colors, formStyles } from "@/constants/theme";
 import { ScreenContainer } from "@/components/ScreenContainer";

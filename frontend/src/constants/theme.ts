@@ -380,3 +380,20 @@ export const managementStyles = StyleSheet.create({
         marginTop: spacing.sm,
     },
 });
+
+export const tableStyles = StyleSheet.create({
+    table: { minWidth: 820 },
+    row: {
+        flexDirection: "row", alignItems: "center", paddingVertical: spacing.md,
+        borderBottomWidth: 1, borderBottomColor: colors.line,
+    },
+    header: { backgroundColor: colors.paper2 },
+    email: { width: 300, paddingHorizontal: spacing.md, marginBottom: 0 },
+    name: { width: 220, paddingHorizontal: spacing.md, marginBottom: 0 },
+    role: { width: 160, paddingHorizontal: spacing.md, marginBottom: 0 },
+    actions: { width: 140, paddingHorizontal: spacing.sm, marginBottom: 0 },
+    modalBackground: { flex: 1, backgroundColor: "rgba(35,29,22,0.55)" },
+    modalContent: {
+        flexGrow: 1, justifyContent: "center", alignItems: "center", padding: spacing.xl,
+    },
+});
