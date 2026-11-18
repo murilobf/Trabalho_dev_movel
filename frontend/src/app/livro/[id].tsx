@@ -13,8 +13,10 @@ import {
   radius,
   formStyles,
   catalogStyles,
+  detailStyles,
 } from "../../constants/theme";
-import { api } from "../../api/api";
+import { api } from "@/api/api";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface Genero {
   id: number;
@@ -31,6 +33,7 @@ interface Livro {
 
 interface Avaliacao {
   id: number;
+  usuario_id: number;
   usuario_nome: string;
   nota: number;
   texto: string;
@@ -45,13 +48,21 @@ const formatarData = (iso: string | null) =>
   iso ? iso.slice(0, 10).split("-").reverse().join("/") : "";
 
 function ItemAvaliacao({ avaliacao }: { avaliacao: Avaliacao }) {
+  const router = useRouter();
   const [revelado, setRevelado] = useState(false);
   const escondido = avaliacao.contem_spoilers && !revelado && avaliacao.texto.length > 0;
 
   return (
     <View style={styles.reviewItem}>
       <View style={styles.reviewHeader}>
-        <Text style={styles.reviewUser}>{avaliacao.usuario_nome}</Text>
+        <Pressable
+          onPress={() => router.push(`/usuario/${avaliacao.usuario_id}`)}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={`Ver perfil de ${avaliacao.usuario_nome}`}
+        >
+          <Text style={styles.reviewUser}>{avaliacao.usuario_nome}</Text>
+        </Pressable>
         <Text style={styles.reviewRating}>★ {formatarNota(avaliacao.nota)}</Text>
       </View>
       <Text style={typography.caption}>{formatarData(avaliacao.criado_em)}</Text>
@@ -71,6 +82,7 @@ function ItemAvaliacao({ avaliacao }: { avaliacao: Avaliacao }) {
 export default function LivroScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { usuario } = useAuth();
 
   const [livro, setLivro] = useState<Livro | null>(null);
   const [avaliacoes, setAvaliacoes] = useState<Avaliacao[]>([]);
@@ -116,78 +128,117 @@ export default function LivroScreen() {
       : null;
 
   return (
-    <ScreenContainer>
-      <AppBar
-        left={
-          <Pressable onPress={() => router.back()} hitSlop={10}>
-            <Feather name="arrow-left" size={20} color={colors.ink} />
-          </Pressable>
-        }
-      />
+    <ScreenContainer
+      scrollProps={{
+        contentContainerStyle: [formStyles.container, detailStyles.container],
+      }}
+    >
+      <View style={detailStyles.content}>
+        <AppBar
+          left={
+            <Pressable
+              onPress={() => router.back()}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="Voltar"
+              style={({ pressed }) => [
+                detailStyles.backLink,
+                pressed && formStyles.buttonPressed,
+              ]}
+            >
+              <Feather name="arrow-left" size={18} color={colors.inkSoft} />
+              <Text style={catalogStyles.author}>Voltar</Text>
+            </Pressable>
+          }
+        />
 
-      {carregando && !livro ? (
-        <Text style={catalogStyles.statusText}>Carregando...</Text>
-      ) : erro || !livro ? (
-        <Text style={catalogStyles.statusText}>{erro ?? "Livro não encontrado."}</Text>
-      ) : (
-        <View style={formStyles.content}>
-          {/* Dados do livro */}
-          <View style={[formStyles.card, catalogStyles.bookCard]}>
-            <Text style={catalogStyles.bookTitle}>{livro.nome}</Text>
-            <Text style={catalogStyles.author}>{livro.autor}</Text>
+        {carregando && !livro ? (
+          <Text style={catalogStyles.statusText}>carregando...</Text>
+        ) : erro || !livro ? (
+          <Text style={catalogStyles.statusText}>{erro ?? "Livro não encontrado."}</Text>
+        ) : (
+          <>
+            <View style={detailStyles.hero}>
+              <Text accessibilityRole="header" style={[formStyles.title, detailStyles.title]}>
+                {livro.nome}
+              </Text>
 
-            {livro.generos && livro.generos.length > 0 ? (
-              <View style={styles.badges}>
-                {livro.generos.map((g) => (
-                  <Text key={g.id} style={catalogStyles.badge}>
-                    {g.nome}
-                  </Text>
-                ))}
+              <Text style={[catalogStyles.author, detailStyles.author]}>
+                por <Text style={detailStyles.authorName}>{livro.autor}</Text>
+              </Text>
+
+              <View style={styles.summary}>
+                <Text style={styles.summaryValue}>
+                  {media !== null ? formatarNota(media) : "–"}
+                </Text>
+                <Text style={typography.bodySoft}>
+                  {total === 0
+                    ? "Ainda sem avaliações"
+                    : `${total} ${total === 1 ? "avaliação" : "avaliações"}`}
+                </Text>
               </View>
-            ) : null}
-
-            {livro.descricao ? (
-              <Text style={catalogStyles.description}>{livro.descricao}</Text>
-            ) : null}
-
-            <View style={styles.summary}>
-              <Text style={styles.summaryValue}>
-                {media !== null ? formatarNota(media) : "–"}
-              </Text>
-              <Text style={typography.bodySoft}>
-                {total === 0
-                  ? "Ainda sem avaliações"
-                  : `${total} ${total === 1 ? "avaliação" : "avaliações"}`}
-              </Text>
             </View>
-          </View>
 
-          {/* TODO: se não houver usuário logado, leve para o login em vez de abrir a avaliação. */}
-          <Pressable
-            onPress={() => router.push(`/avaliar/${livro.id}`)}
-            style={({ pressed }) => [formStyles.button, pressed && formStyles.buttonPressed]}
-            accessibilityRole="button"
-          >
-            <Text style={formStyles.buttonText}>Avaliar este livro</Text>
-          </Pressable>
+            <View style={detailStyles.columns}>
+              <View style={detailStyles.mainColumn}>
+                <Text
+                  accessibilityRole="header"
+                  style={[formStyles.eyebrow, detailStyles.sectionLabel]}
+                >
+                  SINOPSE
+                </Text>
+                <Text style={[catalogStyles.description, detailStyles.description]}>
+                  {livro.descricao || "Sem sinopse cadastrada."}
+                </Text>
+              </View>
 
-          {/* Avaliações */}
-          <Text style={typography.sectionTitle}>Avaliações</Text>
-          {avaliacoes.length === 0 ? (
-            <Text style={typography.bodySoft}>
-              Ninguém avaliou este livro ainda. Seja o primeiro!
-            </Text>
-          ) : (
-            avaliacoes.map((a) => <ItemAvaliacao key={a.id} avaliacao={a} />)
-          )}
-        </View>
-      )}
+              <View style={detailStyles.sideColumn}>
+                <Text
+                  accessibilityRole="header"
+                  style={[formStyles.eyebrow, detailStyles.sectionLabel]}
+                >
+                  GÊNEROS
+                </Text>
+                <View style={formStyles.chips}>
+                  {(livro.generos ?? []).map((genero) => (
+                    <Text key={genero.id} style={[catalogStyles.badge, detailStyles.genre]}>
+                      {genero.nome}
+                    </Text>
+                  ))}
+                </View>
+              </View>
+            </View>
+
+            {/* Sem login, o botão leva para a tela de login em vez da avaliação. */}
+            <Pressable
+              onPress={() =>
+                usuario ? router.push(`/avaliar/${livro.id}`) : router.push("/telas/login")
+              }
+              style={({ pressed }) => [formStyles.button, pressed && formStyles.buttonPressed]}
+              accessibilityRole="button"
+            >
+              <Text style={formStyles.buttonText}>
+                {usuario ? "Avaliar este livro" : "Entre para avaliar"}
+              </Text>
+            </Pressable>
+
+            {/* Avaliações */}
+            <Text style={typography.sectionTitle}>Avaliações</Text>
+            {avaliacoes.length === 0 ? (
+              <Text style={typography.bodySoft}>
+                Ninguém avaliou este livro ainda. Seja o primeiro!
+              </Text>
+            ) : (
+              avaliacoes.map((a) => <ItemAvaliacao key={a.id} avaliacao={a} />)
+            )}
+          </>
+        )}
+      </View>
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  badges: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   summary: {
     flexDirection: "row",
     alignItems: "baseline",

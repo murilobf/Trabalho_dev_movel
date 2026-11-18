@@ -1,48 +1,25 @@
 // Salvar como: src/app/(tabs)/perfil.tsx
 import { Text, Pressable, Button, View } from "react-native";
-import { useState, useCallback } from "react";
 import { ScreenContainer } from "../../components/ScreenContainer";
 import { AppBar } from "../../components/AppBar";
 import PerfilPublico, { iniciais } from "../../components/PerfilPublico";
 import { layout, typography } from "../../constants/theme";
-import { useRouter, useFocusEffect } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-
-// Formato guardado no AsyncStorage depois do login (resposta de /usuarios_email).
-interface DadosUsuario {
-  id: number;
-  nome: string;
-  email: string;
-}
+import { useRouter } from "expo-router";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function PerfilScreen() {
   const router = useRouter();
+  const { usuario, sair } = useAuth();
 
-  // Antes era useState<string | null>, mas o valor guardado é um objeto.
-  const [dadosUsuario, setDadosUsuario] = useState<DadosUsuario | null>(null);
-
-  useFocusEffect(
-    useCallback(() => {
-      async function carregar() {
-        try {
-          const salvo = await AsyncStorage.getItem("dadosUsuario");
-          setDadosUsuario(salvo ? JSON.parse(salvo) : null);
-        } catch {
-          setDadosUsuario(null);
-        }
-      }
-      carregar();
-    }, [])
-  );
+  const logado = (usuario !== null)
 
   async function fazerLogout() {
-    await AsyncStorage.removeItem("dadosUsuario");
-    setDadosUsuario(null);
+    await sair()
   }
 
   return (
     <ScreenContainer>
-      {dadosUsuario === null ? (
+      {usuario === null ? (
         <>
           <AppBar userInitials="JS" />
 
@@ -58,19 +35,20 @@ export default function PerfilScreen() {
         </>
       ) : (
         <>
-          <AppBar userInitials={iniciais(dadosUsuario.nome)} />
+          <AppBar userInitials={iniciais(usuario.nome)} />
 
           {/* Perfil: estatísticas, atividades, avaliações e progresso de leitura */}
-          <PerfilPublico usuarioId={dadosUsuario.id} ehMeuPerfil />
+          <PerfilPublico usuarioId={usuario.id} ehMeuPerfil />
 
           {/* Dados privados: só aparecem para o próprio usuário */}
           <Text style={typography.sectionTitle}>Minha conta</Text>
           <Text style={layout.fieldLabel}>Email cadastrado</Text>
-          <Text style={layout.fieldValue}>{dadosUsuario.email ?? "Desconhecido"}</Text>
-
+          <Text style={layout.fieldValue}>{usuario.email ?? "Desconhecido"}</Text>
+        
           <View style={{ marginTop: 24 }}>
             <Button title="Logout" onPress={fazerLogout} />
           </View>
+        
         </>
       )}
     </ScreenContainer>

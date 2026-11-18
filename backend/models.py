@@ -10,6 +10,7 @@ class Usuario(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(120), nullable=False)
     email = db.Column(db.String(120), nullable=False, unique=True, index=True)
+    cargo = db.Column(db.String(30), nullable=False, default="usuario")
     senha_hash = db.Column(db.String(255), nullable=False)
     criado_em = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
@@ -18,6 +19,7 @@ class Usuario(db.Model):
             "id": self.id,
             "nome": self.nome,
             "email": self.email,
+            "cargo": self.cargo,
             "criado_em": self.criado_em.isoformat(),
         }
 
@@ -29,6 +31,7 @@ class Livro(db.Model):
     autor = db.Column(db.String(100), nullable=False)
     descricao = db.Column(db.String(500), nullable=True)
     criado_em = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    aprovado = db.Column(db.Boolean, default=False, nullable=False) 
 
     def to_dict(self):
         return {
@@ -37,6 +40,7 @@ class Livro(db.Model):
             "autor": self.autor,
             "descricao": self.descricao,
             "criado_em": self.criado_em.isoformat(),
+            "aprovado": self.aprovado,
         }
 
 class Genero(db.Model):

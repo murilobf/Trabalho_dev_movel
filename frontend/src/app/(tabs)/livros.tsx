@@ -5,6 +5,7 @@ import { colors, formStyles, catalogStyles } from "@/constants/theme";
 import { ScreenContainer } from "@/components/ScreenContainer";
 import { api } from "@/api/api";
 import { useRouter } from "expo-router";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface Genero {
     id: number;
@@ -43,7 +44,11 @@ export default function TelaLivros() {
     const [carregando, setCarregando] = useState(false);
     const router = useRouter();
 
-    const atualizarFiltro = (campo: string, valor: string) =>
+    const { usuario } = useAuth();
+
+    const admin = usuario?.cargo === "admin";
+
+    const atualizarFiltro = (campo:string, valor:string) =>
         setFiltros((anterior) => ({ ...anterior, [campo]: valor }));
     const limparFiltros = () => setFiltros(FILTROS_INICIAIS);
 
@@ -128,6 +133,7 @@ export default function TelaLivros() {
                     color={colors.oxblood}
                     title="Solicite um novo livro"
                     onPress={() => router.push("/telas/form_novo_livro")}
+                    disabled={!usuario}
                 />
             </View>
 

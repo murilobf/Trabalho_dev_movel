@@ -17,7 +17,6 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, fonts, radius, spacing } from '../constants/theme';
 
 // Itens que o theme.ts do projeto não tem; ficam locais para não alterar o tema.
@@ -54,24 +53,12 @@ interface ReviewPayload {
 // por exemplo 'http://192.168.16.41:5000'. Se o src/api/api.js já define a URL base, reaproveite.
 const API_URL = 'http://10.0.2.2:5000';
 
-// O login guarda o usuário no AsyncStorage com a chave "dadosUsuario" (veja perfil.tsx).
-// É esse id que vai no header X-Usuario-Id; sem ele a API responde 401 "é necessário estar logado".
-const getUsuarioId = async (): Promise<number | null> => {
-  try {
-    const salvo = await AsyncStorage.getItem('dadosUsuario');
-    const id = salvo ? JSON.parse(salvo)?.id : null;
-    return typeof id === 'number' ? id : null;
-  } catch {
-    return null;
-  }
-};
-
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const usuarioId = await getUsuarioId();
+async function request<T>(usuarioId: number | null, path: string, init: RequestInit = {}): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
+      // O backend identifica o usuário por este header; sem ele responde 401 "é necessário estar logado".
       ...(usuarioId ? { 'X-Usuario-Id': String(usuarioId) } : {}),
       ...(init.headers ?? {}),
     },
@@ -89,7 +76,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
 }
 
-// Formato que o backend Flask devolve (avaliacoes.py)
+// Formato que o backend Flask devolve (app.py)
 interface ReviewApi {
   id: number;
   livro_id: number;
@@ -112,9 +99,10 @@ const toPayload = (d: ReviewPayload) => ({
   contem_spoilers: d.containsSpoilers,
 });
 
-export const reviewsApi = {
+export const criarReviewsApi = (usuarioId: number | null) => ({
   getBook: async (bookId: number): Promise<Book> => {
     const l = await request<{ id: number; nome: string; autor: string; generos: { nome: string }[] }>(
+      usuarioId,
       `/livros/${bookId}`,
     );
     return {
@@ -126,25 +114,26 @@ export const reviewsApi = {
   },
   // Avaliação do usuário logado para o livro, ou null se ainda não avaliou.
   getMine: async (bookId: number): Promise<Review | null> => {
-    const r = await request<ReviewApi | null>(`/livros/${bookId}/avaliacoes/minha`);
+    const r = await request<ReviewApi | null>(usuarioId, `/livros/${bookId}/avaliacoes/minha`);
     return r ? toReview(r) : null;
   },
   create: async (bookId: number, data: ReviewPayload) =>
     toReview(
-      await request<ReviewApi>(`/livros/${bookId}/avaliacoes`, {
+      await request<ReviewApi>(usuarioId, `/livros/${bookId}/avaliacoes`, {
         method: 'POST',
         body: JSON.stringify(toPayload(data)),
       }),
     ),
   update: async (reviewId: number, data: ReviewPayload) =>
     toReview(
-      await request<ReviewApi>(`/avaliacoes/${reviewId}`, {
+      await request<ReviewApi>(usuarioId, `/avaliacoes/${reviewId}`, {
         method: 'PUT',
         body: JSON.stringify(toPayload(data)),
       }),
     ),
-  remove: (reviewId: number) => request<void>(`/avaliacoes/${reviewId}`, { method: 'DELETE' }),
-};
+  remove: (reviewId: number) =>
+    request<void>(usuarioId, `/avaliacoes/${reviewId}`, { method: 'DELETE' }),
+});
 
 /* -------------------------------------------------------------------------- */
 /* Seletor de nota (meia estrela)                                              */
@@ -219,12 +208,15 @@ const MAX_TEXT = 2000;
 
 interface ReviewScreenProps {
   bookId: number;
+  usuarioId: number | null; // id do usuário logado (vem de useAuth na rota)
   onClose: () => void; // volta para a página do livro
   onSaved?: (review: Review) => void;
   onDeleted?: () => void;
 }
 
-export default function ReviewScreen({ bookId, onClose, onSaved, onDeleted }: ReviewScreenProps) {
+export default function ReviewScreen({ bookId, usuarioId, onClose, onSaved, onDeleted }: ReviewScreenProps) {
+  const reviewsApi = useMemo(() => criarReviewsApi(usuarioId), [usuarioId]);
+
   const [book, setBook] = useState<Book | null>(null);
   const [existing, setExisting] = useState<Review | null>(null);
   const [rating, setRating] = useState(0);
@@ -255,7 +247,7 @@ export default function ReviewScreen({ bookId, onClose, onSaved, onDeleted }: Re
     } finally {
       setLoading(false);
     }
-  }, [bookId]);
+  }, [bookId, reviewsApi]);
 
   useEffect(() => {
     load();
