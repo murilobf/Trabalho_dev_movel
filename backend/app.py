@@ -166,6 +166,7 @@ PROGRESSO DE LEITURA: model e validação
 """
 
 STATUS_LEITURA = ("quero_ler", "lendo", "lido", "abandonado")
+FORMATOS_LEITURA = ("fisico", "digital")
 
 
 class ProgressoLeitura(db.Model):
@@ -184,6 +185,9 @@ class ProgressoLeitura(db.Model):
         db.Integer, db.ForeignKey("livros.id", ondelete="CASCADE"), nullable=False, index=True
     )
     status = db.Column(db.String(20), nullable=False, default="lendo")
+    # "fisico": pagina_atual e total_paginas são páginas reais.
+    # "digital": pagina_atual guarda a porcentagem (0 a 100) e total_paginas é sempre 100.
+    formato = db.Column(db.String(10), nullable=False, default="fisico")
     pagina_atual = db.Column(db.Integer, nullable=False, default=0)
     total_paginas = db.Column(db.Integer, nullable=True)  # informado pelo usuário (o livro não tem)
     criado_em = db.Column(db.DateTime, nullable=False, default=agora)
@@ -200,6 +204,8 @@ class ProgressoLeitura(db.Model):
     def percentual(self):
         if self.status == "lido":
             return 100
+        if self.status == "quero_ler":
+            return None
         if self.total_paginas:
             return min(100, round(self.pagina_atual * 100 / self.total_paginas))
         return None
@@ -210,6 +216,7 @@ class ProgressoLeitura(db.Model):
             "usuario_id": self.usuario_id,
             "livro_id": self.livro_id,
             "status": self.status,
+            "formato": self.formato,
             "pagina_atual": self.pagina_atual,
             "total_paginas": self.total_paginas,
             "percentual": self.percentual,
@@ -218,7 +225,11 @@ class ProgressoLeitura(db.Model):
 
 
 def validar_progresso(data):
-    """Valida o JSON do progresso. Retorna (campos, erro). Só os campos enviados são alterados."""
+    """Valida o JSON do progresso. Retorna (campos, erro). Só os campos enviados são alterados.
+
+    Campos aceitos: status, formato ("fisico" | "digital"), pagina_atual, total_paginas
+    e percentual (0 a 100, só para o formato digital).
+    """
     if not isinstance(data, dict):
         return None, "envie um objeto JSON válido"
 
@@ -228,6 +239,19 @@ def validar_progresso(data):
         if data["status"] not in STATUS_LEITURA:
             return None, f"status deve ser um de: {', '.join(STATUS_LEITURA)}"
         campos["status"] = data["status"]
+
+    if "formato" in data:
+        if data["formato"] not in FORMATOS_LEITURA:
+            return None, f"formato deve ser um de: {', '.join(FORMATOS_LEITURA)}"
+        campos["formato"] = data["formato"]
+
+    if "percentual" in data:
+        percentual = data["percentual"]
+        if type(percentual) is not int or not 0 <= percentual <= 100:
+            return None, "percentual deve ser um inteiro de 0 a 100"
+        if campos.get("formato") == "fisico":
+            return None, "percentual só vale para o formato digital"
+        campos["percentual"] = percentual
 
     if "pagina_atual" in data:
         pagina = data["pagina_atual"]
@@ -242,6 +266,57 @@ def validar_progresso(data):
         campos["total_paginas"] = total
 
     return campos, None
+
+
+def aplicar_progresso(atual, campos):
+    """
+    Calcula o novo estado do progresso a partir do estado atual e dos campos validados.
+    `atual` e o retorno são dicts com: status, formato, pagina_atual, total_paginas.
+    Retorna (novo_estado, erro). Não toca no banco: a rota grava o resultado.
+
+    Regras:
+    - Trocar de formato descarta o progresso do formato anterior.
+    - Digital: total_paginas é sempre 100 e pagina_atual é a porcentagem.
+    - "Lendo" no formato físico exige o total de páginas.
+    - Ao chegar ao total (ou a 100%), o status vira "lido" automaticamente.
+    - "Lido" fecha o progresso em 100%.
+    """
+    novo = dict(atual)
+    formato_antes = atual["formato"]
+    formato_novo = "digital" if "percentual" in campos else campos.get("formato", formato_antes)
+
+    if "status" in campos:
+        novo["status"] = campos["status"]
+
+    novo["formato"] = formato_novo
+    if formato_novo != formato_antes:
+        novo["pagina_atual"] = 0
+        novo["total_paginas"] = 100 if formato_novo == "digital" else None
+
+    if formato_novo == "digital":
+        novo["total_paginas"] = 100
+        if "percentual" in campos:
+            novo["pagina_atual"] = campos["percentual"]
+    else:
+        if "total_paginas" in campos:
+            novo["total_paginas"] = campos["total_paginas"]
+        if "pagina_atual" in campos:
+            novo["pagina_atual"] = campos["pagina_atual"]
+
+    total = novo["total_paginas"]
+    if total and novo["pagina_atual"] > total:
+        return None, "pagina_atual não pode ser maior que total_paginas"
+
+    if novo["status"] == "lendo":
+        if formato_novo == "fisico" and not total:
+            return None, "informe o total de páginas do livro"
+        if total and novo["pagina_atual"] >= total:
+            novo["status"] = "lido"  # chegou ao fim: o livro entra na lista de lidos
+
+    if novo["status"] == "lido" and total:
+        novo["pagina_atual"] = total
+
+    return novo, None
 
 
 def create_app():
@@ -776,7 +851,22 @@ def register_routes(app):
     =========================================================================================
     """
 
+    # READ (progresso do usuário logado neste livro; retorna null se ele ainda não registrou nada)
+    @app.get("/livros/<int:livro_id>/progresso/meu")
+    @login_obrigatorio
+    def obter_meu_progresso(livro_id):
+        progresso = ProgressoLeitura.query.filter_by(
+            usuario_id=g.usuario.id, livro_id=livro_id
+        ).first()
+        return jsonify(progresso.to_dict() if progresso else None)
+
     # CREATE/UPDATE (cria ou atualiza o progresso do usuário logado neste livro)
+    # Exemplos de corpo:
+    #   {"status": "quero_ler"}
+    #   {"status": "lido"}
+    #   {"status": "lendo", "formato": "fisico", "total_paginas": 320, "pagina_atual": 120}
+    #   {"status": "lendo", "formato": "digital", "percentual": 45}
+    # Quando o progresso chega ao fim, a resposta já volta com "status": "lido".
     @app.put("/livros/<int:livro_id>/progresso")
     @login_obrigatorio
     def registrar_progresso(livro_id):
@@ -792,26 +882,32 @@ def register_routes(app):
         ).first()
         criado = progresso is None
         if criado:
-            progresso = ProgressoLeitura(usuario_id=g.usuario.id, livro_id=livro_id)
-            db.session.add(progresso)
+            progresso = ProgressoLeitura(
+                usuario_id=g.usuario.id,
+                livro_id=livro_id,
+                status="lendo",
+                formato="fisico",
+                pagina_atual=0,
+                total_paginas=None,
+            )
 
-        for chave, valor in campos.items():
-            setattr(progresso, chave, valor)
+        novo, erro = aplicar_progresso({
+            "status": progresso.status,
+            "formato": progresso.formato,
+            "pagina_atual": progresso.pagina_atual,
+            "total_paginas": progresso.total_paginas,
+        }, campos)
+        if erro:
+            return jsonify({"erro": erro}), 400
 
-        # Defaults de coluna só são aplicados no INSERT; garante valores antes das checagens.
-        if progresso.status is None:
-            progresso.status = "lendo"
-        if progresso.pagina_atual is None:
-            progresso.pagina_atual = 0
-
-        if progresso.status == "lido" and progresso.total_paginas:
-            progresso.pagina_atual = progresso.total_paginas
-
-        if progresso.total_paginas and progresso.pagina_atual > progresso.total_paginas:
-            db.session.rollback()
-            return jsonify({"erro": "pagina_atual não pode ser maior que total_paginas"}), 400
-
+        progresso.status = novo["status"]
+        progresso.formato = novo["formato"]
+        progresso.pagina_atual = novo["pagina_atual"]
+        progresso.total_paginas = novo["total_paginas"]
         progresso.atualizado_em = agora()
+
+        if criado:
+            db.session.add(progresso)
         try:
             db.session.commit()
         except IntegrityError:

@@ -35,6 +35,7 @@ interface ProgressoPerfil {
   livro_nome: string;
   livro_autor: string;
   status: StatusLeitura;
+  formato: "fisico" | "digital";
   pagina_atual: number;
   total_paginas: number | null;
   percentual: number | null;
@@ -157,12 +158,15 @@ function ItemAvaliacao({ avaliacao, onAbrir }: { avaliacao: AvaliacaoPerfil; onA
 
 function ItemProgresso({ progresso, onAbrir }: { progresso: ProgressoPerfil; onAbrir: () => void }) {
   const pct = progresso.percentual;
+  // No formato digital, pagina_atual guarda a porcentagem: a barra e o "%" já bastam.
   const detalhe =
-    progresso.total_paginas != null
-      ? `página ${progresso.pagina_atual} de ${progresso.total_paginas}`
-      : progresso.status === "lendo" && progresso.pagina_atual > 0
-        ? `página ${progresso.pagina_atual}`
-        : null;
+    progresso.formato === "digital"
+      ? null
+      : progresso.total_paginas != null
+        ? `página ${progresso.pagina_atual} de ${progresso.total_paginas}`
+        : progresso.status === "lendo" && progresso.pagina_atual > 0
+          ? `página ${progresso.pagina_atual}`
+          : null;
 
   return (
     <Pressable onPress={onAbrir} style={styles.card} accessibilityRole="button">
@@ -196,6 +200,13 @@ function ItemProgresso({ progresso, onAbrir }: { progresso: ProgressoPerfil; onA
 
 type Aba = "atividade" | "avaliacoes" | "progresso";
 
+const FILTROS_LEITURA: { chave: "todos" | StatusLeitura; rotulo: string }[] = [
+  { chave: "todos", rotulo: "Todos" },
+  { chave: "quero_ler", rotulo: "Quero ler" },
+  { chave: "lendo", rotulo: "Lendo" },
+  { chave: "lido", rotulo: "Lido" },
+];
+
 interface Props {
   usuarioId: number;
   ehMeuPerfil?: boolean;
@@ -207,6 +218,7 @@ export default function PerfilPublico({ usuarioId, ehMeuPerfil = false }: Props)
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [aba, setAba] = useState<Aba>("atividade");
+  const [filtroLeitura, setFiltroLeitura] = useState<"todos" | StatusLeitura>("todos");
 
   // Roda ao abrir e ao voltar para a tela, para refletir avaliações e progresso novos.
   useFocusEffect(
@@ -245,6 +257,10 @@ export default function PerfilPublico({ usuarioId, ehMeuPerfil = false }: Props)
 
   const { usuario, estatisticas } = perfil;
   const quem = ehMeuPerfil ? "Você ainda não" : "Este usuário ainda não";
+  const progressoFiltrado =
+    filtroLeitura === "todos"
+      ? perfil.progresso
+      : perfil.progresso.filter((p) => p.status === filtroLeitura);
 
   const abas: { chave: Aba; rotulo: string }[] = [
     { chave: "atividade", rotulo: "Atividade" },
@@ -330,14 +346,38 @@ export default function PerfilPublico({ usuarioId, ehMeuPerfil = false }: Props)
           ))
         ))}
 
-      {aba === "progresso" &&
-        (perfil.progresso.length === 0 ? (
-          <Text style={typography.bodySoft}>{quem} registrou nenhuma leitura.</Text>
-        ) : (
-          perfil.progresso.map((p) => (
-            <ItemProgresso key={p.id} progresso={p} onAbrir={() => abrirLivro(p.livro_id)} />
-          ))
-        ))}
+      {aba === "progresso" && (
+        <>
+          <View style={styles.filtros}>
+            {FILTROS_LEITURA.map(({ chave, rotulo }) => {
+              const ativo = filtroLeitura === chave;
+              return (
+                <Pressable
+                  key={chave}
+                  onPress={() => setFiltroLeitura(chave)}
+                  style={[styles.chip, ativo && styles.chipActive]}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: ativo }}
+                >
+                  <Text style={[styles.chipText, ativo && styles.chipTextActive]}>{rotulo}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {progressoFiltrado.length === 0 ? (
+            <Text style={typography.bodySoft}>
+              {perfil.progresso.length === 0
+                ? `${quem} registrou nenhuma leitura.`
+                : "Nenhum livro nesta lista."}
+            </Text>
+          ) : (
+            progressoFiltrado.map((p) => (
+              <ItemProgresso key={p.id} progresso={p} onAbrir={() => abrirLivro(p.livro_id)} />
+            ))
+          )}
+        </>
+      )}
     </View>
   );
 }
@@ -383,6 +423,20 @@ const styles = StyleSheet.create({
   tabActive: { backgroundColor: colors.oxblood, borderColor: colors.oxblood },
   tabText: { fontFamily: fonts.sansMedium, fontSize: 13, color: colors.ink },
   tabTextActive: { color: "#FFFFFF" },
+
+  filtros: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  chip: {
+    minHeight: 34,
+    paddingHorizontal: spacing.md,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  chipActive: { backgroundColor: colors.forest, borderColor: colors.forest },
+  chipText: { fontFamily: fonts.sansMedium, fontSize: 12, color: colors.ink },
+  chipTextActive: { color: "#FFFFFF" },
 
   activityRow: {
     flexDirection: "row",

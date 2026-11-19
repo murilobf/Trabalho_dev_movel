@@ -17,6 +17,7 @@ import {
 } from "../../constants/theme";
 import { api } from "@/api/api";
 import { useAuth } from "@/contexts/AuthContext";
+import ProgressoLeituraCard from "../../components/ProgressoLeituraCard";
 
 interface Genero {
   id: number;
