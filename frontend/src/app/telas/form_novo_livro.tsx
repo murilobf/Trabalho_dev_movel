@@ -1,15 +1,21 @@
-import { Text, TextInput, Pressable, View } from "react-native";
-import { Picker } from "@react-native-picker/picker";
+import { Text, TextInput, Pressable, View, Alert } from "react-native";
 import { useEffect, useState } from "react";
 import { colors, formStyles } from "@/constants/theme";
 import { ScreenContainer } from "@/components/ScreenContainer";
 import { api } from "@/api/api";
 
-const DADOS_INICIAIS = {
+interface DadosNovoLivro {
+    nome: string;
+    autor: string;
+    descricao: string;
+    generos_ids: number[];
+}
+
+const DADOS_INICIAIS: DadosNovoLivro = {
     nome: "",
     autor: "",
     descricao: "",
-    generos_ids: [],     
+    generos_ids: [],
 };
 
 export default function FormLivro(){
@@ -38,19 +44,17 @@ export default function FormLivro(){
         setDadosLivro((anterior) => ({...anterior, [campo]:valor}))
     }
 
-    function enviarDados(){
-        if(enviando)
-            return;
-        try{
-            setEnviando(true);
-            api.post('/livros', dadosLivro);
+    async function enviarDados() {
+        if (enviando) return;
+        setEnviando(true);
+        try {
+            await api.post("/livros", dadosLivro);
             setDadosLivro(DADOS_INICIAIS);
-        }
-        catch{
-            setEnviando(false)
-        }
-        finally{
-            setEnviando(false)
+            Alert.alert("Solicitação enviada!", "Seu livro foi enviado para análise da curadoria.");
+        } catch (e) {
+            Alert.alert("Erro", e instanceof Error ? e.message : "Não foi possível enviar o livro.");
+        } finally {
+            setEnviando(false);
         }
     }
 

@@ -1,10 +1,7 @@
-// Salvar como: src/api/progresso.ts
 // Chamadas do progresso de leitura. As rotas de escrita exigem o header X-Usuario-Id.
 
 // TODO: 10.0.2.2 funciona no emulador do Android Studio. Em celular físico use o IP do PC
-// (ex.: 'http://192.168.16.41:5000'). Use o mesmo valor do ReviewScreen e do src/api/api.js;
-// se o api.js exportar a URL base, importe-a daqui para ter um lugar só para mudar.
-const API_URL = "http://10.0.2.2:5000";
+import { BASE_URL } from "./api"; // ou "@/api/api"
 
 export type StatusLeitura = "quero_ler" | "lendo" | "lido" | "abandonado";
 export type FormatoLeitura = "fisico" | "digital";
@@ -30,7 +27,7 @@ export interface CorpoProgresso {
 }
 
 async function chamar<T>(usuarioId: number, path: string, init: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
+  const res = await fetch(`${BASE_URL}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",

@@ -121,8 +121,7 @@ export default function LivroScreen() {
     }, [id])
   );
 
-  // Média calculada sobre as avaliações carregadas (até 100). Um endpoint de estatísticas
-  // no backend (relatório do livro) deve substituir isso depois.
+  // Média calculada sobre as avaliações carregadas (até 100).
   const media =
     avaliacoes.length > 0
       ? avaliacoes.reduce((soma, a) => soma + a.nota, 0) / avaliacoes.length
@@ -178,6 +177,16 @@ export default function LivroScreen() {
                     : `${total} ${total === 1 ? "avaliação" : "avaliações"}`}
                 </Text>
               </View>
+
+              <Pressable
+                onPress={() => router.push(`/relatorio/${livro.id}` as never)}
+                style={[catalogStyles.secondaryButton, { marginTop: spacing.md }]}
+                accessibilityRole="button"
+              >
+                <Text style={catalogStyles.secondaryButtonText}>
+                  Ver relatório e gráficos do livro
+                </Text>
+              </Pressable>
             </View>
 
             <View style={detailStyles.columns}>
@@ -210,18 +219,47 @@ export default function LivroScreen() {
               </View>
             </View>
 
-            {/* Sem login, o botão leva para a tela de login em vez da avaliação. */}
-            <Pressable
-              onPress={() =>
-                usuario ? router.push(`/avaliar/${livro.id}`) : router.push("/telas/login")
-              }
-              style={({ pressed }) => [formStyles.button, pressed && formStyles.buttonPressed]}
-              accessibilityRole="button"
-            >
-              <Text style={formStyles.buttonText}>
-                {usuario ? "Avaliar este livro" : "Entre para avaliar"}
-              </Text>
-            </Pressable>
+            {/* Progresso de leitura (apenas para usuário logado) */}
+            {usuario ? (
+              <>
+                <View style={{ marginTop: spacing.xl }}>
+                  <ProgressoLeituraCard livroId={livro.id} usuarioId={usuario.id} />
+                </View>
+
+                <Pressable
+                  onPress={() => router.push(`/avaliar/${livro.id}`)}
+                  style={({ pressed }) => [
+                    formStyles.button,
+                    { marginTop: spacing.lg },
+                    pressed && formStyles.buttonPressed,
+                  ]}
+                  accessibilityRole="button"
+                >
+                  <Text style={formStyles.buttonText}>Avaliar este livro</Text>
+                </Pressable>
+              </>
+            ) : (
+              <View style={{ marginTop: spacing.xl, gap: spacing.xs }}>
+                <Text style={typography.sectionTitle}>Seu progresso de leitura</Text>
+                <Text style={typography.bodySoft}>
+                  Entre na sua conta para registrar seu progresso ou avaliar este livro.
+                </Text>
+
+                <Pressable
+                  onPress={() => router.push("/telas/login")}
+                  style={({ pressed }) => [
+                    formStyles.button,
+                    { marginTop: spacing.md },
+                    pressed && formStyles.buttonPressed,
+                  ]}
+                  accessibilityRole="button"
+                >
+                  <Text style={formStyles.buttonText}>
+                    Fazer login para registrar ou avaliar
+                  </Text>
+                </Pressable>
+              </View>
+            )}
 
             {/* Avaliações */}
             <Text style={typography.sectionTitle}>Avaliações</Text>

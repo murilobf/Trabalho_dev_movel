@@ -1,6 +1,4 @@
-// Salvar como: src/components/PerfilPublico.tsx
 // Perfil público de um usuário: estatísticas, atividades, avaliações e progresso de leitura.
-// Usado pela aba Perfil (meu perfil) e pela rota src/app/usuario/[id].tsx (perfil de outra pessoa).
 import { useCallback, useState } from "react";
 import { Text, Pressable, View, StyleSheet } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";

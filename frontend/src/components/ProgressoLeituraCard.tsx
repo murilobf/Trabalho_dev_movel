@@ -1,4 +1,3 @@
-// Salvar como: src/components/ProgressoLeituraCard.tsx
 // Cartão da página do livro para o usuário registrar o progresso de leitura:
 //   Quero ler -> entra na lista "Quero ler" do perfil.
 //   Lendo     -> informa livro físico (total de páginas e página atual) ou digital (porcentagem);

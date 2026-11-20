@@ -1,7 +1,5 @@
-// ReviewScreen.tsx (caminho esperado: src/components/ReviewScreen.tsx; tema em src/constants/theme.ts)
 // Tela de Avaliação de Livro (criar / editar / excluir) do bookxd.
-// Depende apenas de react-native e react-native-safe-area-context (já vem no Expo).
-
+import { BASE_URL } from "@/api/api"; 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -49,12 +47,8 @@ interface ReviewPayload {
   containsSpoilers: boolean;
 }
 
-// TODO: 10.0.2.2 funciona no emulador do Android Studio. Em celular físico use o IP do PC,
-// por exemplo 'http://192.168.16.41:5000'. Se o src/api/api.js já define a URL base, reaproveite.
-const API_URL = 'http://10.0.2.2:5000';
-
 async function request<T>(usuarioId: number | null, path: string, init: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
+  const res = await fetch(`${BASE_URL}${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
