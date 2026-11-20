@@ -3,7 +3,7 @@ import { Text, Pressable, Button, View } from "react-native";
 import { ScreenContainer } from "../../components/ScreenContainer";
 import { AppBar } from "../../components/AppBar";
 import PerfilPublico, { iniciais } from "../../components/PerfilPublico";
-import { layout, typography } from "../../constants/theme";
+import { layout, typography, catalogStyles } from "../../constants/theme";
 import { useRouter } from "expo-router";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -39,6 +39,14 @@ export default function PerfilScreen() {
 
           {/* Perfil: estatísticas, atividades, avaliações e progresso de leitura */}
           <PerfilPublico usuarioId={usuario.id} ehMeuPerfil />
+
+          <Pressable
+            onPress={() => router.push("/telas/relatorio_pessoal")}
+            style={[catalogStyles.secondaryButton, { marginTop: 16 }]}
+            accessibilityRole="button"
+          >
+            <Text style={catalogStyles.secondaryButtonText}>Ver meu relatório de leitura</Text>
+          </Pressable>
 
           {/* Dados privados: só aparecem para o próprio usuário */}
           <Text style={typography.sectionTitle}>Minha conta</Text>

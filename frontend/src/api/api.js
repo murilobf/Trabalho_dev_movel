@@ -1,4 +1,4 @@
-const BASE_URL = "http://10.0.2.2:5000"; // troque pelo IP/host da sua API
+export const BASE_URL = "http://10.0.2.2:5000";
 
 async function request(path, options = {}) {
   const res = await fetch(`${BASE_URL}${path}`, {

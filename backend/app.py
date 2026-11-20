@@ -5,14 +5,16 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from functools import wraps
 
-from models import Usuario, Genero, Livro, GenerosLivros, db
+from models import Usuario, Genero, Livro, GenerosLivros, Avaliacao, ProgressoLeitura, db, _agora
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.sql import text
 
+agora = _agora()
+
 """
 =========================================================================================
-AVALIAÇÕES: model e funções auxiliares
+AVALIAÇÕES: funções auxiliares
 =========================================================================================
 """
 
@@ -20,70 +22,11 @@ NOTA_MIN = 0.5
 NOTA_MAX = 5.0
 TEXTO_MAX = 2000
 
-
-def agora():
-    return datetime.now(timezone.utc)
-
-
-"""
-=========================================================================================
-MODEL
-=========================================================================================
-"""
-
-
-class Avaliacao(db.Model):
-    __tablename__ = "avaliacoes"
-    __table_args__ = (
-        # Um usuário avalia cada livro uma única vez (para mudar, ele edita).
-        db.UniqueConstraint("usuario_id", "livro_id", name="uq_avaliacao_usuario_livro"),
-        db.CheckConstraint("nota >= 0.5 AND nota <= 5", name="ck_avaliacao_nota"),
-    )
-
-    id = db.Column(db.Integer, primary_key=True)
-    # usuario_id não precisa de índice próprio: a UniqueConstraint (usuario_id, livro_id)
-    # já serve para buscas por usuario_id. O índice de livro_id acelera listagens e relatórios.
-    usuario_id = db.Column(
-        db.Integer, db.ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False
-    )
-    livro_id = db.Column(
-        db.Integer, db.ForeignKey("livros.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-    nota = db.Column(db.Float, nullable=False)  # 0.5 a 5, em passos de 0.5
-    texto = db.Column(db.Text, nullable=False, default="")
-    contem_spoilers = db.Column(db.Boolean, nullable=False, default=False)
-    criado_em = db.Column(db.DateTime, nullable=False, default=agora)
-    atualizado_em = db.Column(db.DateTime, nullable=False, default=agora, onupdate=agora)
-
-    # Os backrefs criam Usuario.avaliacoes e Livro.avaliacoes sem editar o models.py.
-    # Com cascade="all, delete-orphan", apagar um usuário (ou livro) pelo ORM, como faz
-    # deletar_usuario, apaga também as avaliações dele, mesmo com o SQLite sem FKs ativas.
-    usuario = db.relationship(
-        "Usuario", backref=db.backref("avaliacoes", cascade="all, delete-orphan")
-    )
-    livro = db.relationship(
-        "Livro", backref=db.backref("avaliacoes", cascade="all, delete-orphan")
-    )
-
-    def to_dict(self):
-        return {
-            "id": self.id,
-            "usuario_id": self.usuario_id,
-            "livro_id": self.livro_id,
-            "nota": self.nota,
-            "texto": self.texto,
-            "contem_spoilers": self.contem_spoilers,
-            "criado_em": self.criado_em.isoformat() if self.criado_em else None,
-            "atualizado_em": self.atualizado_em.isoformat() if self.atualizado_em else None,
-        }
-
-
 """
 =========================================================================================
 AUXILIARES
 =========================================================================================
 """
-
 
 def usuario_atual():
     """Lê o usuário logado a partir do header X-Usuario-Id. Retorna None se inválido."""
@@ -151,74 +94,21 @@ def buscar_avaliacao_do_autor(avaliacao_id):
         return None, (jsonify({"erro": "você só pode alterar suas próprias avaliações"}), 403)
     return avaliacao, None
 
-
 """
 =========================================================================================
-ROTAS
-=========================================================================================
-"""
-
-
-"""
-=========================================================================================
-PROGRESSO DE LEITURA: model e validação
+PROGRESSO DE LEITURA: validação
 =========================================================================================
 """
 
 STATUS_LEITURA = ("quero_ler", "lendo", "lido", "abandonado")
-
-
-class ProgressoLeitura(db.Model):
-    __tablename__ = "progressos_leitura"
-    __table_args__ = (
-        # Um registro de progresso por usuário e livro (para mudar, ele atualiza).
-        db.UniqueConstraint("usuario_id", "livro_id", name="uq_progresso_usuario_livro"),
-        db.CheckConstraint("pagina_atual >= 0", name="ck_progresso_pagina"),
-    )
-
-    id = db.Column(db.Integer, primary_key=True)
-    usuario_id = db.Column(
-        db.Integer, db.ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False
-    )
-    livro_id = db.Column(
-        db.Integer, db.ForeignKey("livros.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-    status = db.Column(db.String(20), nullable=False, default="lendo")
-    pagina_atual = db.Column(db.Integer, nullable=False, default=0)
-    total_paginas = db.Column(db.Integer, nullable=True)  # informado pelo usuário (o livro não tem)
-    criado_em = db.Column(db.DateTime, nullable=False, default=agora)
-    atualizado_em = db.Column(db.DateTime, nullable=False, default=agora, onupdate=agora)
-
-    usuario = db.relationship(
-        "Usuario", backref=db.backref("progressos", cascade="all, delete-orphan")
-    )
-    livro = db.relationship(
-        "Livro", backref=db.backref("progressos", cascade="all, delete-orphan")
-    )
-
-    @property
-    def percentual(self):
-        if self.status == "lido":
-            return 100
-        if self.total_paginas:
-            return min(100, round(self.pagina_atual * 100 / self.total_paginas))
-        return None
-
-    def to_dict(self):
-        return {
-            "id": self.id,
-            "usuario_id": self.usuario_id,
-            "livro_id": self.livro_id,
-            "status": self.status,
-            "pagina_atual": self.pagina_atual,
-            "total_paginas": self.total_paginas,
-            "percentual": self.percentual,
-            "atualizado_em": self.atualizado_em.isoformat() if self.atualizado_em else None,
-        }
-
+FORMATOS_LEITURA = ("fisico", "digital")
 
 def validar_progresso(data):
-    """Valida o JSON do progresso. Retorna (campos, erro). Só os campos enviados são alterados."""
+    """Valida o JSON do progresso. Retorna (campos, erro). Só os campos enviados são alterados.
+
+    Campos aceitos: status, formato ("fisico" | "digital"), pagina_atual, total_paginas
+    e percentual (0 a 100, só para o formato digital).
+    """
     if not isinstance(data, dict):
         return None, "envie um objeto JSON válido"
 
@@ -228,6 +118,19 @@ def validar_progresso(data):
         if data["status"] not in STATUS_LEITURA:
             return None, f"status deve ser um de: {', '.join(STATUS_LEITURA)}"
         campos["status"] = data["status"]
+
+    if "formato" in data:
+        if data["formato"] not in FORMATOS_LEITURA:
+            return None, f"formato deve ser um de: {', '.join(FORMATOS_LEITURA)}"
+        campos["formato"] = data["formato"]
+
+    if "percentual" in data:
+        percentual = data["percentual"]
+        if type(percentual) is not int or not 0 <= percentual <= 100:
+            return None, "percentual deve ser um inteiro de 0 a 100"
+        if campos.get("formato") == "fisico":
+            return None, "percentual só vale para o formato digital"
+        campos["percentual"] = percentual
 
     if "pagina_atual" in data:
         pagina = data["pagina_atual"]
@@ -242,6 +145,57 @@ def validar_progresso(data):
         campos["total_paginas"] = total
 
     return campos, None
+
+
+def aplicar_progresso(atual, campos):
+    """
+    Calcula o novo estado do progresso a partir do estado atual e dos campos validados.
+    `atual` e o retorno são dicts com: status, formato, pagina_atual, total_paginas.
+    Retorna (novo_estado, erro). Não toca no banco: a rota grava o resultado.
+
+    Regras:
+    - Trocar de formato descarta o progresso do formato anterior.
+    - Digital: total_paginas é sempre 100 e pagina_atual é a porcentagem.
+    - "Lendo" no formato físico exige o total de páginas.
+    - Ao chegar ao total (ou a 100%), o status vira "lido" automaticamente.
+    - "Lido" fecha o progresso em 100%.
+    """
+    novo = dict(atual)
+    formato_antes = atual["formato"]
+    formato_novo = "digital" if "percentual" in campos else campos.get("formato", formato_antes)
+
+    if "status" in campos:
+        novo["status"] = campos["status"]
+
+    novo["formato"] = formato_novo
+    if formato_novo != formato_antes:
+        novo["pagina_atual"] = 0
+        novo["total_paginas"] = 100 if formato_novo == "digital" else None
+
+    if formato_novo == "digital":
+        novo["total_paginas"] = 100
+        if "percentual" in campos:
+            novo["pagina_atual"] = campos["percentual"]
+    else:
+        if "total_paginas" in campos:
+            novo["total_paginas"] = campos["total_paginas"]
+        if "pagina_atual" in campos:
+            novo["pagina_atual"] = campos["pagina_atual"]
+
+    total = novo["total_paginas"]
+    if total and novo["pagina_atual"] > total:
+        return None, "pagina_atual não pode ser maior que total_paginas"
+
+    if novo["status"] == "lendo":
+        if formato_novo == "fisico" and not total:
+            return None, "informe o total de páginas do livro"
+        if total and novo["pagina_atual"] >= total:
+            novo["status"] = "lido"  # chegou ao fim: o livro entra na lista de lidos
+
+    if novo["status"] == "lido" and total:
+        novo["pagina_atual"] = total
+
+    return novo, None
 
 
 def create_app():
@@ -472,9 +426,6 @@ def register_routes(app):
             return jsonify({"erro": "erro ao criar livro"}), 500
         
     # READ (todos)
-    """
-    TODO: implementar paginação
-    """
     @app.get("/livros")
     def obter_livros():
 
@@ -776,7 +727,22 @@ def register_routes(app):
     =========================================================================================
     """
 
+    # READ (progresso do usuário logado neste livro; retorna null se ele ainda não registrou nada)
+    @app.get("/livros/<int:livro_id>/progresso/meu")
+    @login_obrigatorio
+    def obter_meu_progresso(livro_id):
+        progresso = ProgressoLeitura.query.filter_by(
+            usuario_id=g.usuario.id, livro_id=livro_id
+        ).first()
+        return jsonify(progresso.to_dict() if progresso else None)
+
     # CREATE/UPDATE (cria ou atualiza o progresso do usuário logado neste livro)
+    # Exemplos de corpo:
+    #   {"status": "quero_ler"}
+    #   {"status": "lido"}
+    #   {"status": "lendo", "formato": "fisico", "total_paginas": 320, "pagina_atual": 120}
+    #   {"status": "lendo", "formato": "digital", "percentual": 45}
+    # Quando o progresso chega ao fim, a resposta já volta com "status": "lido".
     @app.put("/livros/<int:livro_id>/progresso")
     @login_obrigatorio
     def registrar_progresso(livro_id):
@@ -792,26 +758,32 @@ def register_routes(app):
         ).first()
         criado = progresso is None
         if criado:
-            progresso = ProgressoLeitura(usuario_id=g.usuario.id, livro_id=livro_id)
-            db.session.add(progresso)
+            progresso = ProgressoLeitura(
+                usuario_id=g.usuario.id,
+                livro_id=livro_id,
+                status="lendo",
+                formato="fisico",
+                pagina_atual=0,
+                total_paginas=None,
+            )
 
-        for chave, valor in campos.items():
-            setattr(progresso, chave, valor)
+        novo, erro = aplicar_progresso({
+            "status": progresso.status,
+            "formato": progresso.formato,
+            "pagina_atual": progresso.pagina_atual,
+            "total_paginas": progresso.total_paginas,
+        }, campos)
+        if erro:
+            return jsonify({"erro": erro}), 400
 
-        # Defaults de coluna só são aplicados no INSERT; garante valores antes das checagens.
-        if progresso.status is None:
-            progresso.status = "lendo"
-        if progresso.pagina_atual is None:
-            progresso.pagina_atual = 0
-
-        if progresso.status == "lido" and progresso.total_paginas:
-            progresso.pagina_atual = progresso.total_paginas
-
-        if progresso.total_paginas and progresso.pagina_atual > progresso.total_paginas:
-            db.session.rollback()
-            return jsonify({"erro": "pagina_atual não pode ser maior que total_paginas"}), 400
-
+        progresso.status = novo["status"]
+        progresso.formato = novo["formato"]
+        progresso.pagina_atual = novo["pagina_atual"]
+        progresso.total_paginas = novo["total_paginas"]
         progresso.atualizado_em = agora()
+
+        if criado:
+            db.session.add(progresso)
         try:
             db.session.commit()
         except IntegrityError:
@@ -928,6 +900,179 @@ def register_routes(app):
             "avaliacoes": avaliacoes,
             "progresso": progresso,
             "atividades": atividades,
+        })
+
+    """
+    =========================================================================================
+    RELATÓRIOS (Livro e Pessoal)
+    =========================================================================================
+    """
+
+    # RELATÓRIO 1: Dados sobre um livro (público: acessível a qualquer visitante)
+    @app.get("/livros/<int:livro_id>/relatorio")
+    def relatorio_livro(livro_id):
+        livro = db.session.get(Livro, livro_id)
+        if not livro:
+            return jsonify({"erro": "livro não encontrado"}), 404
+
+        avaliacoes = (
+            Avaliacao.query.filter_by(livro_id=livro_id)
+            .order_by(Avaliacao.criado_em.asc())
+            .all()
+        )
+
+        total_avaliacoes = len(avaliacoes)
+        nota_media = (
+            round(sum(a.nota for a in avaliacoes) / total_avaliacoes, 2)
+            if total_avaliacoes > 0
+            else None
+        )
+
+        # Distribuição por todas as 10 faixas possíveis (0.5 a 5.0, passo 0.5)
+        faixas_possiveis = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0]
+        contagem_notas = defaultdict(int)
+        for a in avaliacoes:
+            contagem_notas[float(a.nota)] += 1
+
+        distribuicao = [
+            {
+                "nota": nota,
+                "quantidade": contagem_notas[nota],
+                "percentual": round((contagem_notas[nota] * 100) / total_avaliacoes, 1)
+                if total_avaliacoes > 0
+                else 0.0,
+            }
+            for nota in faixas_possiveis
+        ]
+
+        # Evolução das avaliações por mês (AAAA-MM), com média do mês e média acumulada
+        por_mes = defaultdict(list)
+        for a in avaliacoes:
+            chave_mes = a.criado_em.strftime("%Y-%m") if a.criado_em else "sem-data"
+            por_mes[chave_mes].append(a.nota)
+
+        evolucao = []
+        soma_acumulada = 0.0
+        qtd_acumulada = 0
+        for mes in sorted(por_mes.keys()):
+            notas_mes = por_mes[mes]
+            soma_acumulada += sum(notas_mes)
+            qtd_acumulada += len(notas_mes)
+            evolucao.append({
+                "periodo": mes,
+                "quantidade": len(notas_mes),
+                "media_periodo": round(sum(notas_mes) / len(notas_mes), 2),
+                "media_acumulada": round(soma_acumulada / qtd_acumulada, 2),
+            })
+
+        return jsonify({
+            "livro": {
+                "id": livro.id,
+                "nome": livro.nome,
+                "autor": livro.autor,
+            },
+            "resumo": {
+                "total_avaliacoes": total_avaliacoes,
+                "nota_media": nota_media,
+            },
+            "distribuicao": distribuicao,
+            "evolucao": evolucao,
+        })
+
+    # RELATÓRIO 2: Dados pessoais do usuário logado
+    @app.get("/usuarios/meu/relatorio")
+    @login_obrigatorio
+    def relatorio_pessoal():
+        uid = g.usuario.id
+
+        avaliacoes = (
+            db.session.query(Avaliacao, Livro)
+            .join(Livro, Livro.id == Avaliacao.livro_id)
+            .filter(Avaliacao.usuario_id == uid)
+            .order_by(Avaliacao.criado_em.asc())
+            .all()
+        )
+        progressos = (
+            ProgressoLeitura.query.filter_by(usuario_id=uid)
+            .order_by(ProgressoLeitura.atualizado_em.asc())
+            .all()
+        )
+
+        total_avaliados = len(avaliacoes)
+        nota_media = (
+            round(sum(a.nota for a, _ in avaliacoes) / total_avaliados, 2)
+            if total_avaliados > 0
+            else None
+        )
+        total_lidos = sum(1 for p in progressos if p.status == "lido")
+        total_lendo = sum(1 for p in progressos if p.status == "lendo")
+
+        # Ranking por gênero com base nos livros avaliados ou marcados como lidos
+        livros_considerados = {a.livro_id for a, _ in avaliacoes} | {
+            p.livro_id for p in progressos if p.status == "lido"
+        }
+
+        ranking_generos = []
+        if livros_considerados:
+            marcadores = ", ".join(
+                f":livro_{i}" for i in range(len(livros_considerados))
+            )
+            params = {
+                f"livro_{i}": lid for i, lid in enumerate(livros_considerados)
+            }
+            linhas_generos = db.session.execute(
+                text(f"""
+                    SELECT g.id, g.nome, COUNT(DISTINCT gl.livro_id) AS quantidade
+                    FROM generos g
+                    JOIN generosLivros gl ON gl.genero_id = g.id
+                    WHERE gl.livro_id IN ({marcadores})
+                    GROUP BY g.id, g.nome
+                    ORDER BY quantidade DESC, g.nome ASC
+                """),
+                params,
+            ).mappings().all()
+
+            total_livros_ranked = len(livros_considerados)
+            for row in linhas_generos:
+                ranking_generos.append({
+                    "genero_id": row["id"],
+                    "nome": row["nome"],
+                    "quantidade": row["quantidade"],
+                    "percentual": round((row["quantidade"] * 100) / total_livros_ranked, 1),
+                })
+
+        # Evolução da atividade por mês (avaliações feitas + atualizações de progresso)
+        atividade_mensal = defaultdict(lambda: {"avaliacoes": 0, "leituras": 0})
+        for a, _ in avaliacoes:
+            if a.criado_em:
+                atividade_mensal[a.criado_em.strftime("%Y-%m")]["avaliacoes"] += 1
+        for p in progressos:
+            if p.atualizado_em:
+                atividade_mensal[p.atualizado_em.strftime("%Y-%m")]["leituras"] += 1
+
+        evolucao = []
+        for mes in sorted(atividade_mensal.keys()):
+            item = atividade_mensal[mes]
+            evolucao.append({
+                "periodo": mes,
+                "avaliacoes": item["avaliacoes"],
+                "leituras": item["leituras"],
+                "total": item["avaliacoes"] + item["leituras"],
+            })
+
+        return jsonify({
+            "usuario": {
+                "id": g.usuario.id,
+                "nome": g.usuario.nome,
+            },
+            "resumo": {
+                "livros_avaliados": total_avaliados,
+                "nota_media": nota_media,
+                "livros_lidos": total_lidos,
+                "livros_lendo": total_lendo,
+            },
+            "ranking_generos": ranking_generos,
+            "evolucao": evolucao,
         })
 
     """
