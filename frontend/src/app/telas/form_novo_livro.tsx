@@ -8,7 +8,8 @@ const DADOS_INICIAIS = {
     nome: "",
     autor: "",
     descricao: "",
-    generos_ids: [],     
+    generos_ids: [],
+    aprovado: 0     
 };
 
 export default function FormLivro(){

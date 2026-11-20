@@ -21,6 +21,9 @@ export default function TelaAdmin(){
             <Pressable onPress={() => router.push("/telas/gestao_pessoas")} style={{ marginTop: 16 }}>
                             <Text style={[typography.body, { color: "#7C2A34" }]}>Usuários</Text>
             </Pressable>
+            <Pressable onPress={() => router.push("/telas/gestao_livros")} style={{ marginTop: 16 }}>
+                            <Text style={[typography.body, { color: "#7C2A34" }]}>Livros</Text>
+            </Pressable>
         </ScreenContainer>
     )
 }

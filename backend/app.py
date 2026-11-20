@@ -209,6 +209,7 @@ def register_routes(app):
         generos_ids = data.get("generos_ids")
         autor = data.get("autor").strip()
         descricao = data.get("descricao").strip()
+        aprovado = False
 
         if not isinstance(nome, str):
             return jsonify({"erro": "nome é obrigatório"}), 400
@@ -238,11 +239,12 @@ def register_routes(app):
                 db.session.rollback()
                 return jsonify({"erro": "um ou mais gêneros não existem"}), 400
 
-            query_livro = text("INSERT INTO livros (nome, autor, descricao) VALUES (:nome, :autor, :descricao) RETURNING id")
+            query_livro = text("INSERT INTO livros (nome, autor, descricao, aprovado) VALUES (:nome, :autor, :descricao, :aprovado) RETURNING id")
             livro_id = db.session.execute(query_livro, {
                 "nome": nome,
                 "autor": autor,
-                "descricao": descricao
+                "descricao": descricao,
+                "aprovado": aprovado
             }).scalar()
 
             query_livro_genero = text("INSERT INTO generosLivros (livro_id, genero_id) VALUES (:livro_id, :genero_id)")
@@ -268,14 +270,13 @@ def register_routes(app):
     def obter_livros():
 
         requisicao = request.args.to_dict()
-
-        sql = "SELECT * FROM livros"
-        condicoes = []
-        parametros = {}
-
         nome = requisicao.get("nome")
         autor = requisicao.get("autor")
         genero_id = requisicao.get("genero_id")
+        aprovado = requisicao.get("aprovado")
+        sql = "SELECT * FROM livros"
+        condicoes = []
+        parametros = {}
 
         if nome:
             condicoes.append("nome LIKE :nome")
@@ -295,6 +296,11 @@ def register_routes(app):
             """)
             parametros["genero_id"] = genero_id
 
+        if aprovado:
+            aprovado = int(aprovado) 
+            condicoes.append("aprovado = :aprovado")
+            parametros["aprovado"] = aprovado
+
         if condicoes:
             sql += " WHERE " + " AND ".join(condicoes)
 
@@ -302,9 +308,9 @@ def register_routes(app):
             text(sql), parametros
         ).mappings().all()
 
-        query_relacao = text("SELECT g.nome, g.id AS genero_id, gl.id AS livro_id" \
-        " FROM generos g" \
-        " JOIN generosLivros gl ON g.id = gl.genero_id")
+        query_relacao = text("""SELECT g.nome, g.id AS genero_id, gl.id AS livro_id
+        FROM generos g
+        JOIN generosLivros gl ON g.id = gl.genero_id""")
 
         generos_livros = db.session.execute(query_relacao).mappings().all()
 
@@ -353,7 +359,50 @@ def register_routes(app):
         return jsonify(resultado)
 
     #UPDATE
-    @app.put("/livros")
+    @app.put("/livros/<int:livro_id>")
+    def atualiza_livro(livro_id):
+        requisicao = request.get_json()
+        nome = requisicao.get("nome")
+        autor = requisicao.get("autor")
+        aprovado = requisicao.get("aprovado")
+        generos_ids = requisicao.get("generos_ids")
+        values = []
+        params = {"livro_id": livro_id}
+
+        if nome:
+            values.append("nome = :nome")
+            params["nome"] = nome
+
+        if autor:
+            values.append("autor = :autor")
+            params["autor"] = autor
+
+        if aprovado:
+            values.append("aprovado = :aprovado")
+            params["aprovado"] = aprovado
+
+        if generos_ids:
+
+            db.session.execute(
+                text("DELETE FROM generosLivros WHERE livro_id = :livro_id"),
+                {"livro_id": livro_id}
+            )
+
+            for genero_id in generos_ids:
+                db.session.execute(
+                    text("""
+                        INSERT INTO generosLivros (livro_id, genero_id)
+                        VALUES (:livro_id, :genero_id)
+                    """),
+                    {"livro_id": livro_id, "genero_id": genero_id}
+                )
+        print(db.session.execute(text("SELECT * from generosLivros")).mappings().all())
+        query = "UPDATE livros SET " + ", ".join(values) + " WHERE id = :livro_id"
+        db.session.execute(text(query), params)
+        db.session.commit()
+
+        return "", 204
+
 
     #DELETE
     @app.delete("/livros")
