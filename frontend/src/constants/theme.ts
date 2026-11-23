@@ -1,7 +1,5 @@
 import { StyleSheet } from "react-native";
 
-// Paleta — mesma inspiração do mockup original (papel + tons de estante),
-// mas você pode ajustar livremente sem afetar nenhum componente.
 export const colors = {
   paper: "#EFE6D3",
   paper2: "#E3D5B8",
