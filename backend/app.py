@@ -308,7 +308,7 @@ def register_routes(app):
             text(sql), parametros
         ).mappings().all()
 
-        query_relacao = text("""SELECT g.nome, g.id AS genero_id, gl.id AS livro_id
+        query_relacao = text("""SELECT g.nome, g.id AS genero_id, gl.livro_id AS livro_id
         FROM generos g
         JOIN generosLivros gl ON g.id = gl.genero_id""")
 
@@ -405,10 +405,8 @@ def register_routes(app):
 
 
     #DELETE
-    @app.delete("/livros")
-    def deleta_livro():
-        requisicao = request.args.to_dict()
-        livro_id = requisicao['id']
+    @app.delete("/livros/<int:livro_id>")
+    def deleta_livro(livro_id):
 
         query = text("DELETE FROM livros WHERE id = :id")
         db.session.execute(query, {
@@ -416,7 +414,7 @@ def register_routes(app):
         })
 
         db.session.commit()
-        return jsonify({""}), 204
+        return "", 204
 
     """
     =========================================================================================

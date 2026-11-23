@@ -1,9 +1,9 @@
-import { Text, TextInput, Button, View, Modal, Pressable, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
+import { Text, TextInput, Button, View, Modal, Pressable, ScrollView, KeyboardAvoidingView, Platform, useWindowDimensions } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { Feather } from "@expo/vector-icons";
-import { formStyles, detailStyles, colors, catalogStyles, managementStyles, tableStyles } from "@/constants/theme";
+import { formStyles, detailStyles, colors, catalogStyles, managementStyles, tableStyles, mobileStyles } from "@/constants/theme";
 import { ScreenContainer } from "@/components/ScreenContainer";
 import { AppBar } from "@/components/AppBar";
 import { api } from "@/api/api";
@@ -23,6 +23,8 @@ export default function TelaGestaoUsuarios(){
     const [carregando, setCarregando] = useState(true)
     const [erroLista, setErroLista] = useState("")
     const [erroModal, setErroModal] = useState("")
+    const { width } = useWindowDimensions()
+    const celular = width < 860
     const router = useRouter()
 
     const termo = normalizar(pesquisa.trim())
@@ -106,7 +108,11 @@ export default function TelaGestaoUsuarios(){
     }
 
     return(
-        <ScreenContainer scrollProps={{ contentContainerStyle: [formStyles.container, detailStyles.container] }}>
+        <ScreenContainer scrollProps={{
+            contentContainerStyle: [formStyles.container, detailStyles.container],
+            keyboardShouldPersistTaps: "handled",
+            keyboardDismissMode: "on-drag"
+        }}>
             <View style={detailStyles.content}>
                 <AppBar left={
                     <Pressable onPress={() => router.back()} hitSlop={10}
@@ -143,8 +149,42 @@ export default function TelaGestaoUsuarios(){
                         <Text style={catalogStyles.statusText}>
                             {usuarios.length ? "Nenhum usuário corresponde à pesquisa." : "Nenhum usuário cadastrado."}
                         </Text>
+                    ) : celular ? (
+                        <View>
+                            {filtrados.map((usuario) => (
+                                <View key={usuario.id} style={mobileStyles.listItem}>
+                                    <Text selectable style={catalogStyles.bookTitle}>{usuario.nome}</Text>
+                                    <Text selectable style={mobileStyles.email}>{usuario.email}</Text>
+                                    <Text style={catalogStyles.badge}>
+                                        {usuario.cargo === "admin" ? "Administrador" : usuario.cargo === "usuario" ? "Usuário" : usuario.cargo}
+                                    </Text>
+
+                                    <View style={mobileStyles.actions}>
+                                        <Pressable onPress={() => abrirModal(usuario)}
+                                            accessibilityRole="button" accessibilityLabel={`Editar ${usuario.nome}`}
+                                            style={({ pressed }) => [
+                                                catalogStyles.secondaryButton, mobileStyles.actionButton,
+                                                pressed && formStyles.buttonPressed
+                                            ]}>
+                                            <Feather name="edit-2" size={18} color={colors.oxblood} />
+                                            <Text style={catalogStyles.secondaryButtonText}>Editar</Text>
+                                        </Pressable>
+
+                                        <Pressable onPress={() => abrirModal(usuario, true)}
+                                            accessibilityRole="button" accessibilityLabel={`Excluir ${usuario.nome}`}
+                                            style={({ pressed }) => [
+                                                catalogStyles.secondaryButton, mobileStyles.actionButton,
+                                                pressed && formStyles.buttonPressed
+                                            ]}>
+                                            <Feather name="trash-2" size={18} color={colors.oxblood} />
+                                            <Text style={catalogStyles.secondaryButtonText}>Excluir</Text>
+                                        </Pressable>
+                                    </View>
+                                </View>
+                            ))}
+                        </View>
                     ) : (
-                        <ScrollView horizontal>
+                        <ScrollView horizontal keyboardShouldPersistTaps="handled">
                             <View style={tableStyles.table}>
                                 <View style={[tableStyles.row, tableStyles.header]}>
                                     <Text style={[formStyles.label, tableStyles.email]}>Email</Text>
@@ -177,8 +217,9 @@ export default function TelaGestaoUsuarios(){
 
                 <Modal visible={selecionado !== null} transparent animationType="fade" onRequestClose={fecharModal}>
                     <KeyboardAvoidingView style={tableStyles.modalBackground}
-                        behavior={Platform.OS === "ios" ? "padding" : undefined}>
-                        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={tableStyles.modalContent}>
+                        behavior={Platform.OS === "ios" ? "padding" : "height"}>
+                        <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag"
+                            contentContainerStyle={[tableStyles.modalContent, celular && mobileStyles.modalContent]}>
                             <View style={[formStyles.card, managementStyles.dialog]}>
                                 <Text style={formStyles.cardTitle}>{excluindo ? "Excluir usuário" : "Editar usuário"}</Text>
                                 <Text style={formStyles.cardDescription}>
@@ -192,25 +233,21 @@ export default function TelaGestaoUsuarios(){
                                         <View style={formStyles.field}>
                                             <Text style={formStyles.label}>Nome</Text>
                                             <TextInput style={formStyles.input} value={dados.nome} editable={!salvando}
-                                                accessibilityLabel="Nome" onChangeText={(valor) => atualizarDados("nome", valor)}
-                                            />
+                                                accessibilityLabel="Nome" onChangeText={(valor) => atualizarDados("nome", valor)} />
                                         </View>
                                         <View style={formStyles.field}>
                                             <Text style={formStyles.label}>Email</Text>
                                             <TextInput style={formStyles.input} value={dados.email} editable={!salvando}
                                                 accessibilityLabel="Email" keyboardType="email-address" autoCapitalize="none"
-                                                autoCorrect={false} onChangeText={(valor) => atualizarDados("email", valor)} 
-                                            />
+                                                autoCorrect={false} onChangeText={(valor) => atualizarDados("email", valor)} />
                                         </View>
                                         <View style={formStyles.field}>
                                             <Text style={formStyles.label}>Cargo</Text>
-                                            <Picker
-                                                style={[formStyles.picker, catalogStyles.genrePicker]}
-                                                selectedValue={dados.cargo}
-                                                onValueChange={(valor) => atualizarDados("cargo", valor)}
-                                            >
-                                                <Picker.Item key="usuario" label="Usuário" value="usuario"/>
-                                                <Picker.Item key="admin" label="Administrador" value="admin"/>
+                                            <Picker style={[formStyles.picker, catalogStyles.genrePicker]}
+                                                selectedValue={dados.cargo} enabled={!salvando}
+                                                onValueChange={(valor) => atualizarDados("cargo", valor)}>
+                                                <Picker.Item label="Usuário" value="usuario" />
+                                                <Picker.Item label="Administrador" value="admin" />
                                             </Picker>
                                         </View>
                                     </>
@@ -218,10 +255,25 @@ export default function TelaGestaoUsuarios(){
 
                                 {!!erroModal && <Text style={managementStyles.error}>{erroModal}</Text>}
 
-                                <View style={[formStyles.chips, managementStyles.dialogActions]}>
-                                    <Button title="Cancelar" color={colors.inkSoft} disabled={salvando} onPress={fecharModal} />
-                                    <Button title={salvando ? "Aguarde..." : excluindo ? "Excluir" : "Salvar"}
-                                        color={colors.oxblood} disabled={salvando} onPress={confirmar} />
+                                <View style={[mobileStyles.actions, managementStyles.dialogActions]}>
+                                    <Pressable onPress={fecharModal} disabled={salvando} accessibilityRole="button"
+                                        accessibilityState={{ disabled: salvando }}
+                                        style={({ pressed }) => [
+                                            catalogStyles.secondaryButton, mobileStyles.actionButton,
+                                            (pressed || salvando) && formStyles.buttonPressed
+                                        ]}>
+                                        <Text style={catalogStyles.secondaryButtonText}>Cancelar</Text>
+                                    </Pressable>
+                                    <Pressable onPress={confirmar} disabled={salvando} accessibilityRole="button"
+                                        accessibilityState={{ disabled: salvando }}
+                                        style={({ pressed }) => [
+                                            formStyles.button, mobileStyles.actionButton,
+                                            (pressed || salvando) && formStyles.buttonPressed
+                                        ]}>
+                                        <Text style={formStyles.buttonText}>
+                                            {salvando ? "Aguarde..." : excluindo ? "Excluir" : "Salvar"}
+                                        </Text>
+                                    </Pressable>
                                 </View>
                             </View>
                         </ScrollView>

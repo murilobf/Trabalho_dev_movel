@@ -1,6 +1,7 @@
 import { Text, TextInput, Button, View, Modal, Pressable, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
 import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Picker } from "@react-native-picker/picker";
 import { Feather } from "@expo/vector-icons";
 import { layout, formStyles, detailStyles, colors, catalogStyles, managementStyles } from "@/constants/theme";
 import { ScreenContainer } from "@/components/ScreenContainer";
@@ -10,6 +11,15 @@ import { api } from "@/api/api";
 type Genero = { id: number, nome: string }
 type Livro = { id: number, nome: string, autor: string, generos: Genero[], aprovado: boolean | 0 | 1 }
 type DadosLivro = { nome: string, autor: string, generos_ids: number[], aprovado: boolean }
+
+const FILTROS_INICIAIS = { nome: "", autor: "", dataInicio: "", dataFim: "", genero_id: "", aprovado: "" }
+type Filtros = typeof FILTROS_INICIAIS
+
+const montarQueryString = (filtros: Filtros) => {
+    const partes = Object.entries(filtros).filter(([, valor]) => valor !== "")
+        .map(([chave, valor]) => `${encodeURIComponent(chave)}=${encodeURIComponent(valor)}`)
+    return partes.length ? `?${partes.join("&")}` : ""
+}
 
 export default function TelaGestaoLivros(){
     const [livros, setLivros] = useState<Livro[]>([])
@@ -21,27 +31,43 @@ export default function TelaGestaoLivros(){
     const [carregando, setCarregando] = useState(true)
     const [erroLista, setErroLista] = useState("")
     const [erroModal, setErroModal] = useState("")
+    const [filtros, setFiltros] = useState(FILTROS_INICIAIS)
+    const requisicaoAtual = useRef(0)
     const router = useRouter()
 
-    useEffect(() => {
-        carregarDados()
-    }, [])
+    const atualizarFiltro = (campo: keyof Filtros, valor: string) =>
+        setFiltros((anterior) => ({ ...anterior, [campo]: valor }))
+    const limparFiltros = () => setFiltros(FILTROS_INICIAIS)
 
-    async function carregarDados(){
+    const carregarDados = useCallback(async () => {
+        const requisicao = ++requisicaoAtual.current
         setCarregando(true)
         setErroLista("")
         try{
-            const [listaLivros, listaGeneros] = await Promise.all([api.get("/livros"), api.get("/generos")])
+            const [listaLivros, listaGeneros] = await Promise.all([
+                api.get(`/livros${montarQueryString(filtros)}`), api.get("/generos")
+            ])
+            if(requisicao !== requisicaoAtual.current) return
             setLivros(listaLivros)
             setGeneros(listaGeneros)
         }
         catch{
-            setErroLista("Não foi possível carregar os livros e gêneros.")
+            if(requisicao === requisicaoAtual.current) setErroLista("Não foi possível carregar os livros e gêneros.")
         }
         finally{
-            setCarregando(false)
+            if(requisicao === requisicaoAtual.current) setCarregando(false)
         }
-    }
+    }, [filtros])
+
+    useEffect(() => {
+        setCarregando(true)
+        setErroLista("")
+        const timeout = setTimeout(() => { carregarDados() }, 400)
+        return () => {
+            clearTimeout(timeout)
+            requisicaoAtual.current += 1
+        }
+    }, [carregarDados])
 
     function abrirModal(livro: Livro, excluir = false){
         setSelecionado(livro)
@@ -100,7 +126,7 @@ export default function TelaGestaoLivros(){
     }
 
     return(
-        <ScreenContainer scrollProps={{ contentContainerStyle: [formStyles.container, detailStyles.container] }}>
+        <ScreenContainer scrollProps={{ contentContainerStyle: [formStyles.container, detailStyles.container], keyboardShouldPersistTaps: "handled" }}>
             <View style={detailStyles.content}>
                 <AppBar left={
                     <Pressable onPress={() => router.back()} hitSlop={10}
@@ -116,9 +142,39 @@ export default function TelaGestaoLivros(){
                     <Text style={formStyles.intro}>Atualize os dados e revise a aprovação dos livros.</Text>
                 </View>
 
+                <View style={[formStyles.card, catalogStyles.filters]}>
+                    <Text style={formStyles.cardTitle}>Filtrar livros</Text>
+                    <TextInput style={formStyles.input} placeholder="Nome do livro" value={filtros.nome}
+                        accessibilityLabel="Filtrar por nome do livro" onChangeText={(v) => atualizarFiltro("nome", v)} />
+                    <TextInput style={formStyles.input} placeholder="Nome do autor" value={filtros.autor}
+                        accessibilityLabel="Filtrar por autor" onChangeText={(v) => atualizarFiltro("autor", v)} />
+                    <View style={catalogStyles.dateRow}>
+                        <TextInput style={[formStyles.input, catalogStyles.dateInput]} placeholder="Publicado de (AAAA-MM-DD)"
+                            accessibilityLabel="Data inicial de publicação" value={filtros.dataInicio} maxLength={10}
+                            onChangeText={(v) => atualizarFiltro("dataInicio", v)} />
+                        <TextInput style={[formStyles.input, catalogStyles.dateInput]} placeholder="Até (AAAA-MM-DD)"
+                            accessibilityLabel="Data final de publicação" value={filtros.dataFim} maxLength={10}
+                            onChangeText={(v) => atualizarFiltro("dataFim", v)} />
+                    </View>
+                    <Picker style={[formStyles.picker, catalogStyles.genrePicker]} selectedValue={filtros.genero_id}
+                        accessibilityLabel="Filtrar por gênero" onValueChange={(v) => atualizarFiltro("genero_id", String(v))}>
+                        <Picker.Item label="Todos os gêneros" value="" />
+                        {generos.map((genero) => <Picker.Item key={genero.id} label={genero.nome} value={String(genero.id)} />)}
+                    </Picker>
+                    <Picker style={[formStyles.picker, catalogStyles.genrePicker]} selectedValue={filtros.aprovado}
+                        accessibilityLabel="Filtrar por aprovação" onValueChange={(v) => atualizarFiltro("aprovado", String(v))}>
+                        <Picker.Item label="Todos os livros" value="" />
+                        <Picker.Item label="Aprovados" value="1" />
+                        <Picker.Item label="Pendentes" value="0" />
+                    </Picker>
+                    <Pressable onPress={limparFiltros} style={catalogStyles.secondaryButton} accessibilityRole="button">
+                        <Text style={catalogStyles.secondaryButtonText}>Limpar filtros</Text>
+                    </Pressable>
+                </View>
+
                 <View style={managementStyles.toolbar}>
                     <Text style={catalogStyles.author}>
-                        {carregando ? "Carregando..." : `${livros.length} livros cadastrados`}
+                        {carregando ? "Carregando..." : `${livros.length} livros encontrados`}
                     </Text>
                 </View>
 
@@ -130,7 +186,7 @@ export default function TelaGestaoLivros(){
                 )}
 
                 {!carregando && !erroLista && livros.length === 0 && (
-                    <Text style={catalogStyles.statusText}>Nenhum livro cadastrado.</Text>
+                    <Text style={catalogStyles.statusText}>Nenhum livro encontrado com os filtros selecionados.</Text>
                 )}
 
                 {livros.map((livro) => (

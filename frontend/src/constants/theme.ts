@@ -397,3 +397,35 @@ export const tableStyles = StyleSheet.create({
         flexGrow: 1, justifyContent: "center", alignItems: "center", padding: spacing.xl,
     },
 });
+
+export const adminStyles = StyleSheet.create({
+    section: { paddingTop: spacing.xl },
+    item: {
+        flexDirection: "row", alignItems: "center", gap: spacing.md,
+        paddingVertical: spacing.xl, paddingHorizontal: spacing.sm,
+        borderBottomWidth: 1, borderBottomColor: colors.line,
+    },
+    itemPressed: { backgroundColor: colors.paper2 },
+    icon: {
+        width: 48, height: 48, borderRadius: radius.md,
+        backgroundColor: colors.paper2, alignItems: "center", justifyContent: "center",
+    },
+    text: { flex: 1, minWidth: 0 },
+});
+
+export const mobileStyles = StyleSheet.create({
+    listItem: {
+        gap: spacing.sm, paddingVertical: spacing.xl,
+        borderBottomWidth: 1, borderBottomColor: colors.line,
+    },
+    email: {
+        fontFamily: fonts.sans, fontSize: 14, lineHeight: 22,
+        color: colors.inkSoft, flexShrink: 1,
+    },
+    actions: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.sm },
+    actionButton: {
+        flexGrow: 1, flexBasis: 120, minHeight: 48, marginTop: 0,
+        flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm,
+    },
+    modalContent: { padding: spacing.md },
+});
