@@ -26,6 +26,7 @@ const FILTROS_INICIAIS = {
     dataInicio: "", // AAAA-MM-DD
     dataFim: "", // AAAA-MM-DD
     genero_id: "", // "" = todos
+    aprovado: 1
 };
 
 const montarQueryString = (filtros: Record<string, string>) => {

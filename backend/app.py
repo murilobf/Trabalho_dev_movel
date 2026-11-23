@@ -266,8 +266,8 @@ def register_routes(app):
     # READ (lista)
     @app.get("/usuarios")
     def listar_usuarios():  
-        usuarios = db.session.execute(text("SELECT nome, email, cargo FROM usuarios")).mappings().all()
-        return jsonify([u.to_dict() for u in usuarios])
+        usuarios = db.session.execute(text("SELECT id, nome, email, cargo FROM usuarios")).mappings().all()
+        return jsonify([dict(u) for u in usuarios])
 
     # READ (um usuário)
     @app.get("/usuarios/<int:usuario_id>")
@@ -321,26 +321,55 @@ def register_routes(app):
     # UPDATE
     @app.put("/usuarios/<int:usuario_id>")
     def atualizar_usuario(usuario_id):
-        usuario = Usuario.query.get(usuario_id)
+        values = []
+        params = {"usuario_id": usuario_id}
+
+        requisicao = request.get_json(silent=True) or {}
+        email = requisicao.get("email")
+        nome = requisicao.get("nome")
+        senha = requisicao.get("senha")
+        cargo = requisicao.get("cargo")
+
+        usuario = db.session.execute(text("SELECT * FROM usuarios WHERE id = :usuario_id"), {
+            "usuario_id": usuario_id
+        }).mappings().first()
+
         if not usuario:
             return jsonify({"erro": "usuário não encontrado"}), 404
 
-        data = request.get_json(silent=True) or {}
-
-        novo_email = data.get("email")
-        if novo_email and novo_email != usuario.email:
-            if Usuario.query.filter_by(email=novo_email).first():
+        if email and email != usuario["email"]:
+            existente = db.session.execute(text("SELECT * FROM usuarios WHERE email=:email"), {
+                "email": email
+            }).mappings().first()
+            
+            if existente:
                 return jsonify({"erro": "já existe um usuário com esse email"}), 409
-            usuario.email = novo_email
+            
+            values.append("email = :email")
+            params["email"] = email
 
-        if data.get("nome"):
-            usuario.nome = data["nome"]
+        if nome:
+            values.append("nome = :nome")
+            params["nome"] = nome
 
-        if data.get("senha"):
-            usuario.senha_hash = generate_password_hash(data["senha"])
+        if senha:
+            values.append("senha_hash = :senha_hash")
+            params["senha_hash"] = generate_password_hash(senha)
+
+        if cargo:
+            values.append("cargo = :cargo")
+            params["cargo"] = cargo
+
+        if not values:
+            return jsonify({"erro": "nenhum campo para atualizar"}), 400
+
+        query = "UPDATE usuarios SET " + ", ".join(values) + " WHERE id = :usuario_id"
+
+        db.session.execute(text(query), params)
 
         db.session.commit()
-        return jsonify(usuario.to_dict())
+
+        return "", 204
 
     # DELETE
     @app.delete("/usuarios/<int:usuario_id>")
@@ -372,6 +401,7 @@ def register_routes(app):
         generos_ids = data.get("generos_ids")
         autor = data.get("autor").strip()
         descricao = data.get("descricao").strip()
+        aprovado = False
 
         if not isinstance(nome, str):
             return jsonify({"erro": "nome é obrigatório"}), 400
@@ -401,13 +431,12 @@ def register_routes(app):
                 db.session.rollback()
                 return jsonify({"erro": "um ou mais gêneros não existem"}), 400
 
-            ## default de aprovado é False!! mudar depois
             query_livro = text("INSERT INTO livros (nome, autor, descricao, aprovado) VALUES (:nome, :autor, :descricao, :aprovado) RETURNING id")
             livro_id = db.session.execute(query_livro, {
                 "nome": nome,
                 "autor": autor,
                 "descricao": descricao,
-                "aprovado": True
+                "aprovado": aprovado
             }).scalar()
 
             query_livro_genero = text("INSERT INTO generosLivros (livro_id, genero_id) VALUES (:livro_id, :genero_id)")
@@ -430,14 +459,13 @@ def register_routes(app):
     def obter_livros():
 
         requisicao = request.args.to_dict()
-
-        sql = "SELECT * FROM livros"
-        condicoes = []
-        parametros = {}
-
         nome = requisicao.get("nome")
         autor = requisicao.get("autor")
         genero_id = requisicao.get("genero_id")
+        aprovado = requisicao.get("aprovado")
+        sql = "SELECT * FROM livros"
+        condicoes = []
+        parametros = {}
 
         if nome:
             condicoes.append("nome LIKE :nome")
@@ -457,6 +485,11 @@ def register_routes(app):
             """)
             parametros["genero_id"] = genero_id
 
+        if aprovado:
+            aprovado = int(aprovado) 
+            condicoes.append("aprovado = :aprovado")
+            parametros["aprovado"] = aprovado
+
         if condicoes:
             sql += " WHERE " + " AND ".join(condicoes)
 
@@ -464,9 +497,9 @@ def register_routes(app):
             text(sql), parametros
         ).mappings().all()
 
-        query_relacao = text("SELECT g.nome, g.id AS genero_id, gl.id AS livro_id" \
-        " FROM generos g" \
-        " JOIN generosLivros gl ON g.id = gl.genero_id")
+        query_relacao = text("""SELECT g.nome, g.id AS genero_id, gl.livro_id AS livro_id
+        FROM generos g
+        JOIN generosLivros gl ON g.id = gl.genero_id""")
 
         generos_livros = db.session.execute(query_relacao).mappings().all()
 
@@ -507,13 +540,54 @@ def register_routes(app):
         return jsonify(resultado)
 
     #UPDATE
-    @app.put("/livros")
+    @app.put("/livros/<int:livro_id>")
+    def atualiza_livro(livro_id):
+        requisicao = request.get_json()
+        nome = requisicao.get("nome")
+        autor = requisicao.get("autor")
+        aprovado = requisicao.get("aprovado")
+        generos_ids = requisicao.get("generos_ids")
+        values = []
+        params = {"livro_id": livro_id}
+
+        if nome:
+            values.append("nome = :nome")
+            params["nome"] = nome
+
+        if autor:
+            values.append("autor = :autor")
+            params["autor"] = autor
+
+        if aprovado:
+            values.append("aprovado = :aprovado")
+            params["aprovado"] = aprovado
+
+        if generos_ids:
+
+            db.session.execute(
+                text("DELETE FROM generosLivros WHERE livro_id = :livro_id"),
+                {"livro_id": livro_id}
+            )
+
+            for genero_id in generos_ids:
+                db.session.execute(
+                    text("""
+                        INSERT INTO generosLivros (livro_id, genero_id)
+                        VALUES (:livro_id, :genero_id)
+                    """),
+                    {"livro_id": livro_id, "genero_id": genero_id}
+                )
+        print(db.session.execute(text("SELECT * from generosLivros")).mappings().all())
+        query = "UPDATE livros SET " + ", ".join(values) + " WHERE id = :livro_id"
+        db.session.execute(text(query), params)
+        db.session.commit()
+
+        return "", 204
+
 
     #DELETE
-    @app.delete("/livros")
-    def deleta_livro():
-        requisicao = request.args.to_dict()
-        livro_id = requisicao['id']
+    @app.delete("/livros/<int:livro_id>")
+    def deleta_livro(livro_id):
 
         # O SQLite não aplica ON DELETE CASCADE por padrão: remove as avaliações do livro antes.
         db.session.execute(text("DELETE FROM avaliacoes WHERE livro_id = :id"), {"id": livro_id})
@@ -584,21 +658,41 @@ def register_routes(app):
         return jsonify(dict(genero))
 
     # UPDATE
-    @app.put("/generos")
+    @app.put("/generos/<int:id>")
+    def atualiza_genero(id):
+        requisicao = request.get_json() or {}
+        print(id, requisicao)
+        nome = requisicao.get("nome")
 
-    # DELETE
-    @app.delete("/generos")
-    def deleta_genero():
-        requisicao = request.args.to_dict()
-        genero_id = requisicao['id']
+        if not nome:
+            return jsonify({"erro": "Nome não enviado"}), 400
 
-        query = text("DELETE FROM generos WHERE id = :id")
+
+        query = text("""UPDATE generos
+        SET nome = :nome
+        WHERE id = :id""")
+
         db.session.execute(query, {
-            "id":genero_id
+            "nome": nome,
+            "id": id
         })
 
         db.session.commit()
-        return jsonify({""}), 204
+
+        return "", 204
+    
+
+    # DELETE
+    @app.delete("/generos/<int:id>")
+    def deleta_genero(id):
+
+        query = text("DELETE FROM generos WHERE id = :id")
+        db.session.execute(query, {
+            "id": id
+        })
+
+        db.session.commit()
+        return "", 204
     
 
 

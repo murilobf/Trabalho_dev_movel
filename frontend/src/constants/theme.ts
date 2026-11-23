@@ -324,3 +324,106 @@ export const detailStyles = StyleSheet.create({
         fontSize: 12, paddingHorizontal: 12, paddingVertical: 7,
     },
 });
+
+export const managementStyles = StyleSheet.create({
+    toolbar: {
+        flexDirection: "row",
+        flexWrap: "wrap",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: spacing.md,
+        paddingVertical: spacing.xl,
+    },
+    row: {
+        flexDirection: "row",
+        flexWrap: "wrap",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: spacing.md,
+        paddingVertical: spacing.lg,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.line,
+    },
+    genreInfo: {
+        flexGrow: 1,
+        flexShrink: 1,
+        flexBasis: 220,
+        minWidth: 0,
+    },
+    actionButton: {
+        minHeight: 44,
+        alignItems: "center",
+        justifyContent: "center",
+        paddingHorizontal: spacing.md,
+        paddingVertical: spacing.sm,
+        borderRadius: radius.md,
+    },
+    error: {
+        fontFamily: fonts.sansMedium,
+        fontSize: 13,
+        lineHeight: 21,
+        color: colors.oxblood,
+        marginBottom: spacing.md,
+    },
+    overlay: {
+        flex: 1,
+        padding: spacing.xl,
+        backgroundColor: "rgba(35,29,22,0.55)",
+    },
+    dialog: {
+        width: "100%",
+        maxWidth: 460,
+    },
+    dialogActions: {
+        marginTop: spacing.sm,
+    },
+});
+
+export const tableStyles = StyleSheet.create({
+    table: { minWidth: 820 },
+    row: {
+        flexDirection: "row", alignItems: "center", paddingVertical: spacing.md,
+        borderBottomWidth: 1, borderBottomColor: colors.line,
+    },
+    header: { backgroundColor: colors.paper2 },
+    email: { width: 300, paddingHorizontal: spacing.md, marginBottom: 0 },
+    name: { width: 220, paddingHorizontal: spacing.md, marginBottom: 0 },
+    role: { width: 160, paddingHorizontal: spacing.md, marginBottom: 0 },
+    actions: { width: 140, paddingHorizontal: spacing.sm, marginBottom: 0 },
+    modalBackground: { flex: 1, backgroundColor: "rgba(35,29,22,0.55)" },
+    modalContent: {
+        flexGrow: 1, justifyContent: "center", alignItems: "center", padding: spacing.xl,
+    },
+});
+
+export const adminStyles = StyleSheet.create({
+    section: { paddingTop: spacing.xl },
+    item: {
+        flexDirection: "row", alignItems: "center", gap: spacing.md,
+        paddingVertical: spacing.xl, paddingHorizontal: spacing.sm,
+        borderBottomWidth: 1, borderBottomColor: colors.line,
+    },
+    itemPressed: { backgroundColor: colors.paper2 },
+    icon: {
+        width: 48, height: 48, borderRadius: radius.md,
+        backgroundColor: colors.paper2, alignItems: "center", justifyContent: "center",
+    },
+    text: { flex: 1, minWidth: 0 },
+});
+
+export const mobileStyles = StyleSheet.create({
+    listItem: {
+        gap: spacing.sm, paddingVertical: spacing.xl,
+        borderBottomWidth: 1, borderBottomColor: colors.line,
+    },
+    email: {
+        fontFamily: fonts.sans, fontSize: 14, lineHeight: 22,
+        color: colors.inkSoft, flexShrink: 1,
+    },
+    actions: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.sm },
+    actionButton: {
+        flexGrow: 1, flexBasis: 120, minHeight: 48, marginTop: 0,
+        flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm,
+    },
+    modalContent: { padding: spacing.md },
+});

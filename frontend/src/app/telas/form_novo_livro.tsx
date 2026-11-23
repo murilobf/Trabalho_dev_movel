@@ -1,4 +1,4 @@
-import { Text, TextInput, Pressable, View, Alert } from "react-native";
+import { Text, TextInput, Pressable, View } from "react-native";
 import { useEffect, useState } from "react";
 import { colors, formStyles } from "@/constants/theme";
 import { ScreenContainer } from "@/components/ScreenContainer";
@@ -16,6 +16,7 @@ const DADOS_INICIAIS: DadosNovoLivro = {
     autor: "",
     descricao: "",
     generos_ids: [],
+    aprovado: 0     
 };
 
 export default function FormLivro(){
