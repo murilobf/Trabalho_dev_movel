@@ -267,7 +267,7 @@ def register_routes(app):
     @app.get("/usuarios")
     def listar_usuarios():  
         usuarios = db.session.execute(text("SELECT id, nome, email, cargo FROM usuarios")).mappings().all()
-        return jsonify([dict(u) for u in usuarios])
+        return jsonify([dict(u) for u in usuarios]), 200
 
     # READ (um usuário)
     @app.get("/usuarios/<int:usuario_id>")
@@ -463,6 +463,7 @@ def register_routes(app):
         autor = requisicao.get("autor")
         genero_id = requisicao.get("genero_id")
         aprovado = requisicao.get("aprovado")
+        recentes = requisicao.get("recentes")
         sql = "SELECT * FROM livros"
         condicoes = []
         parametros = {}
@@ -492,6 +493,9 @@ def register_routes(app):
 
         if condicoes:
             sql += " WHERE " + " AND ".join(condicoes)
+
+        if recentes:
+            sql += " ORDER BY criado_em LIMIT 5"
 
         livros = db.session.execute(
             text(sql), parametros

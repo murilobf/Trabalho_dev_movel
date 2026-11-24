@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { colors, formStyles, catalogStyles } from "@/constants/theme";
 import { ScreenContainer } from "@/components/ScreenContainer";
 import { api } from "@/api/api";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface Genero {
@@ -29,7 +29,7 @@ const FILTROS_INICIAIS = {
     aprovado: 1
 };
 
-const montarQueryString = (filtros: Record<string, string>) => {
+const montarQueryString = (filtros: Record<string, string | number>) => {
     const partes = Object.entries(filtros)
         .filter(([, valor]) => valor !== "")
         .map(([chave, valor]) =>
@@ -44,6 +44,12 @@ export default function TelaLivros() {
     const [filtros, setFiltros] = useState(FILTROS_INICIAIS);
     const [carregando, setCarregando] = useState(false);
     const router = useRouter();
+    const parametros = useLocalSearchParams<{ nome?: string; genero_id?: string }>();
+
+    useEffect(() => {
+        if(parametros.nome === undefined && parametros.genero_id === undefined) return;
+        setFiltros({ ...FILTROS_INICIAIS, nome: parametros.nome ?? "", genero_id: parametros.genero_id ?? "" });
+    }, [parametros.nome, parametros.genero_id]);
 
     const { usuario } = useAuth();
 

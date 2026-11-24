@@ -427,3 +427,19 @@ export const mobileStyles = StyleSheet.create({
     },
     modalContent: { padding: spacing.md },
 });
+// Complementos da Home; tipografia, botões e paleta vêm dos estilos compartilhados.
+export const homeStyles = StyleSheet.create({
+    searchRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.xl },
+    searchInput: { flexGrow: 1, flexShrink: 1, flexBasis: 240, width: "auto", minWidth: 0 },
+    searchButton: { flexDirection: "row", gap: spacing.sm, marginTop: 0, flexGrow: 1, flexBasis: 110 },
+    section: { paddingTop: 32 },
+    sectionHeader: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: spacing.sm },
+    link: { minHeight: 44, flexDirection: "row", alignItems: "center", gap: spacing.sm },
+    bookRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.xl, borderBottomWidth: 1, borderBottomColor: colors.line },
+    genreText: { fontFamily: fonts.sansMedium, fontSize: 11, lineHeight: 18, color: colors.forest, marginTop: spacing.sm },
+    genreList: { marginTop: spacing.lg },
+    quickLinks: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.lg },
+    contribute: { marginTop: 32, paddingVertical: spacing.xl, borderTopWidth: 1, borderTopColor: colors.line, gap: spacing.sm },
+    notice: { paddingVertical: spacing.lg, gap: spacing.md },
+    loading: { marginVertical: spacing.xl },
+});
