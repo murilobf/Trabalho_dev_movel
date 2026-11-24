@@ -51,10 +51,22 @@ export default function TabsLayout() {
         options={{
           title: "Livros",
           tabBarIcon: ({ color, size }) => (
-            <Feather name="user" size={size} color={color} />
+            <Feather name="book-open" size={size} color={color} />
           ),
         }}
       />
+
+      <Tabs.Protected guard={usuario?.cargo == "admin"}>
+        <Tabs.Screen 
+        name="admin"
+        options={{
+          title: "Admin",
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="settings" size={size} color={color} />
+          ),
+        }}
+        />
+      </Tabs.Protected>
     </Tabs>
   );
 }
