@@ -10,7 +10,6 @@ from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.sql import text
 
-agora = _agora()
 
 """
 =========================================================================================
@@ -878,7 +877,7 @@ def register_routes(app):
         progresso.formato = novo["formato"]
         progresso.pagina_atual = novo["pagina_atual"]
         progresso.total_paginas = novo["total_paginas"]
-        progresso.atualizado_em = agora()
+        progresso.atualizado_em = _agora()
 
         if criado:
             db.session.add(progresso)
