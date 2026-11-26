@@ -1,6 +1,6 @@
-import { Text, TextInput, Button, Pressable } from "react-native";
+import { Text, TextInput, Pressable } from "react-native";
 import { useState, useEffect } from "react";
-import { layout, typography, colors } from "../../constants/theme";
+import { layout, typography, formStyles, colors } from "../../constants/theme";
 import { ScreenContainer } from "../../components/ScreenContainer";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "expo-router";
@@ -64,11 +64,17 @@ export default function TelaLogin() {
             </Text>
           )}
 
-          <Button
-            title="Login"
-            onPress={fazerLogin}
-            disabled={autenticando || !email.trim() || !senha}
-          />
+          <Pressable
+              onPress={fazerLogin}
+              disabled={autenticando || !email.trim() || !senha}
+              accessibilityRole="button"
+              style={({ pressed }) => [
+                  formStyles.button,
+                  (pressed || autenticando || !email.trim() || !senha) && { opacity: 0.5 }
+              ]}
+          >
+              <Text style={formStyles.buttonText}>Entrar</Text>
+          </Pressable>
 
           <Pressable
             onPress={() => router.push("/telas/registro")}

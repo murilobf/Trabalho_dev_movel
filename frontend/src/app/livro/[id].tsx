@@ -121,7 +121,6 @@ export default function LivroScreen() {
     }, [id])
   );
 
-  // Média calculada sobre as avaliações carregadas (até 100).
   const media =
     avaliacoes.length > 0
       ? avaliacoes.reduce((soma, a) => soma + a.nota, 0) / avaliacoes.length

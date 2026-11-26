@@ -1,6 +1,6 @@
-import { Text, TextInput, Button, Alert } from "react-native";
+import { Text, TextInput, Pressable, Alert } from "react-native";
 import { useState } from "react";
-import { layout } from "../../constants/theme";
+import { layout, formStyles } from "../../constants/theme";
 import { ScreenContainer } from "../../components/ScreenContainer";
 import { api } from "../../api/api";
 import { useRouter } from "expo-router";
@@ -67,11 +67,17 @@ export default function TelaRegistro() {
 
       {erro && <Text style={{ marginBottom: 12 }}>{erro}</Text>}
 
-      <Button
-        title={enviando ? "Cadastrando..." : "Registrar"}
-        onPress={fazerRegistro}
-        disabled={enviando || !nomeUsuario.trim() || !email.trim() || !senha}
-      />
+      <Pressable
+          onPress={fazerRegistro}
+          disabled={!email.trim() || !senha || !nomeUsuario}
+          accessibilityRole="button"
+          style={({ pressed }) => [
+              formStyles.button,
+              (pressed || !email.trim() || !senha || !nomeUsuario) && { opacity: 0.5 }
+          ]}
+      >
+          <Text style={formStyles.buttonText}>{enviando ? "Enviando..." : "Enviar"}</Text>
+      </Pressable>
     </ScreenContainer>
   );
 }

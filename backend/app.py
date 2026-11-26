@@ -48,10 +48,7 @@ def login_obrigatorio(funcao):
 
 
 def validar_corpo(data, criando):
-    """
-    Valida o JSON de criação/edição. Retorna (campos, erro).
-    Na criação a nota é obrigatória; na edição só os campos enviados são alterados.
-    """
+
     if not isinstance(data, dict):
         return None, "envie um objeto JSON válido"
 
@@ -103,11 +100,7 @@ STATUS_LEITURA = ("quero_ler", "lendo", "lido", "abandonado")
 FORMATOS_LEITURA = ("fisico", "digital")
 
 def validar_progresso(data):
-    """Valida o JSON do progresso. Retorna (campos, erro). Só os campos enviados são alterados.
 
-    Campos aceitos: status, formato ("fisico" | "digital"), pagina_atual, total_paginas
-    e percentual (0 a 100, só para o formato digital).
-    """
     if not isinstance(data, dict):
         return None, "envie um objeto JSON válido"
 
@@ -147,18 +140,7 @@ def validar_progresso(data):
 
 
 def aplicar_progresso(atual, campos):
-    """
-    Calcula o novo estado do progresso a partir do estado atual e dos campos validados.
-    `atual` e o retorno são dicts com: status, formato, pagina_atual, total_paginas.
-    Retorna (novo_estado, erro). Não toca no banco: a rota grava o resultado.
 
-    Regras:
-    - Trocar de formato descarta o progresso do formato anterior.
-    - Digital: total_paginas é sempre 100 e pagina_atual é a porcentagem.
-    - "Lendo" no formato físico exige o total de páginas.
-    - Ao chegar ao total (ou a 100%), o status vira "lido" automaticamente.
-    - "Lido" fecha o progresso em 100%.
-    """
     novo = dict(atual)
     formato_antes = atual["formato"]
     formato_novo = "digital" if "percentual" in campos else campos.get("formato", formato_antes)
@@ -1184,5 +1166,4 @@ def register_routes(app):
 
 if __name__ == "__main__":
     app = create_app()
-    # host="0.0.0.0" para conseguir acessar de um celular físico na mesma rede
     app.run(host="0.0.0.0", port=5000, debug=True)

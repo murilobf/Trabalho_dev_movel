@@ -27,7 +27,7 @@ export default function PerfilScreen() {
           <Text style={typography.bodySoft}>Entre na sua conta para ver o seu perfil de leitura.</Text>
 
           <Pressable onPress={() => router.push("/telas/login")} style={{ marginTop: 16 }}>
-            <Text style={[typography.body, { color: "#7C2A34" }]}>Fazer Login →</Text>
+            <Text style={[typography.body, { color: "#7C2A34" }]}>Fazer Login</Text>
           </Pressable>
           <Pressable onPress={() => router.push("/telas/registro")} style={{ marginTop: 16 }}>
             <Text style={[typography.body, { color: "#7C2A34" }]}>Registrar Nova Conta</Text>
